@@ -68,8 +68,9 @@ const formatCurrency = (n: number) =>
 const statusBadge = (status: string) => {
   const map: Record<string, string> = {
     disponible: 'badge-disponible',
-    vendido: 'badge-vendido',
+    agotado: 'badge-agotado',
     reservado: 'badge-reservado',
+    vendido: 'badge-vendido',
   };
   return map[status] || '';
 };
@@ -123,8 +124,8 @@ export default function Page() {
   const [uploadForm, setUploadForm] = useState({
     image_url: '',
     description: '',
-    gender: 'unisex',
-    style: 'moderno',
+    gender: '',
+    style: '',
     status: 'disponible',
     code: '',
   });
@@ -284,7 +285,15 @@ export default function Page() {
 
   const saveProduct = async () => {
     if (!uploadForm.description) {
-      showToast('La descripción es requerida', 'error');
+      showToast('Selecciona la descripción del material', 'error');
+      return;
+    }
+    if (!uploadForm.gender) {
+      showToast('Selecciona el género', 'error');
+      return;
+    }
+    if (!uploadForm.style) {
+      showToast('Selecciona el estilo', 'error');
       return;
     }
     setLoading(true);
@@ -307,7 +316,7 @@ export default function Page() {
         showToast(editingProduct ? 'Producto actualizado' : 'Producto creado');
         setShowUploadForm(false);
         setEditingProduct(null);
-        setUploadForm({ image_url: '', description: '', gender: 'unisex', style: 'moderno', status: 'disponible', code: '' });
+        setUploadForm({ image_url: '', description: '', gender: '', style: '', status: 'disponible', code: '' });
         fetchProducts();
       } else {
         const data = await res.json();
@@ -328,7 +337,7 @@ export default function Page() {
   };
 
   const toggleProductStatus = async (product: Product) => {
-    const statuses = ['disponible', 'reservado', 'vendido'];
+    const statuses = ['disponible', 'agotado', 'reservado', 'vendido'];
     const next = statuses[(statuses.indexOf(product.status) + 1) % statuses.length];
     try {
       const res = await fetch('/api/products', {
@@ -345,9 +354,9 @@ export default function Page() {
     setUploadForm({
       image_url: product.image_url || '',
       description: product.description,
-      gender: product.gender,
-      style: product.style,
-      status: product.status,
+      gender: product.gender || '',
+      style: product.style || '',
+      status: product.status || 'disponible',
       code: product.code || '',
     });
     setShowUploadForm(true);
@@ -799,23 +808,23 @@ export default function Page() {
                 <h2 className="text-lg font-bold text-white">Catálogo</h2>
                 <div className="flex gap-2">
                   <button onClick={exportPDF} className="p-2 rounded-lg bg-[#111] border border-[#222] text-[#D4AF37] hover:bg-[#1a1a1a] transition-colors" title="Exportar PDF"><FileText size={18} /></button>
-                  <button onClick={() => { setEditingProduct(null); setUploadForm({ image_url: '', description: '', gender: 'unisex', style: 'moderno', status: 'disponible', code: '' }); setShowUploadForm(true); }} className="btn-gold flex items-center gap-1 text-sm px-3 py-2"><Plus size={16} /> Subir</button>
+                  <button onClick={() => { setEditingProduct(null); setUploadForm({ image_url: '', description: '', gender: '', style: '', status: 'disponible', code: '' }); setShowUploadForm(true); }} className="btn-gold flex items-center gap-1 text-sm px-3 py-2"><Plus size={16} /> Subir</button>
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <select className="premium-input text-xs flex-1" value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)}>
-                  <option value="todos">Todos</option>
-                  <option value="hombre">Hombre</option>
-                  <option value="mujer">Mujer</option>
-                  <option value="unisex">Unisex</option>
-                </select>
-                <select className="premium-input text-xs flex-1" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                  <option value="todos">Todos estados</option>
-                  <option value="disponible">Disponible</option>
-                  <option value="reservado">Reservado</option>
-                  <option value="vendido">Vendido</option>
-                </select>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {['todos', 'mujer', 'hombre', 'nino', 'unisex', 'gafas_de_sol'].map((g) => (
+                  <button key={g} onClick={() => setGenderFilter(g)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${genderFilter === g ? 'bg-[#D4AF37] text-black' : 'bg-[#111] text-[#888] border border-[#222]'}`}>
+                    {g === 'todos' ? 'Todos' : g === 'gafas_de_sol' ? 'Sol' : g.charAt(0).toUpperCase() + g.slice(1).replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {['todos', 'disponible', 'agotado', 'reservado', 'vendido'].map((s) => (
+                  <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${statusFilter === s ? (s === 'disponible' ? 'bg-green-600 text-white' : s === 'agotado' ? 'bg-red-600 text-white' : s === 'reservado' ? 'bg-yellow-600 text-white' : 'bg-orange-600 text-white') : 'bg-[#111] text-[#888] border border-[#222]'}`}>
+                    {s === 'todos' ? 'Todos' : s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
               </div>
 
               {/* Upload Form Modal */}
@@ -838,27 +847,51 @@ export default function Page() {
                         )}
                         <input type="file" accept="image/*" onChange={handleProductImageSelect} className="hidden" />
                       </label>
-                      <input className="premium-input text-sm" placeholder="Descripción *" value={uploadForm.description} onChange={(e) => setUploadForm((f) => ({ ...f, description: e.target.value }))} />
-                      <div className="grid grid-cols-2 gap-3">
-                        <select className="premium-input text-sm" value={uploadForm.gender} onChange={(e) => setUploadForm((f) => ({ ...f, gender: e.target.value }))}>
-                          <option value="unisex">Unisex</option>
-                          <option value="hombre">Hombre</option>
-                          <option value="mujer">Mujer</option>
-                        </select>
-                        <select className="premium-input text-sm" value={uploadForm.style} onChange={(e) => setUploadForm((f) => ({ ...f, style: e.target.value }))}>
-                          <option value="moderno">Moderno</option>
-                          <option value="clasico">Clásico</option>
-                          <option value="deportivo">Deportivo</option>
-                          <option value="vintage">Vintage</option>
+                      {/* Descripción - Selector de material */}
+                      <div>
+                        <label className="text-xs font-bold text-white block mb-1.5">Descripción *</label>
+                        <select className="premium-input text-sm" value={uploadForm.description} onChange={(e) => setUploadForm((f) => ({ ...f, description: e.target.value }))}>
+                          <option value="">Seleccionar...</option>
+                          <option value="Acetato">Acetato</option>
+                          <option value="Acerada">Acerada</option>
+                          <option value="Mixta">Mixta</option>
+                          <option value="Tres Piezas">Tres Piezas</option>
                         </select>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <select className="premium-input text-sm" value={uploadForm.status} onChange={(e) => setUploadForm((f) => ({ ...f, status: e.target.value }))}>
-                          <option value="disponible">Disponible</option>
-                          <option value="reservado">Reservado</option>
-                          <option value="vendido">Vendido</option>
-                        </select>
-                        <input className="premium-input text-sm" placeholder="Código" value={uploadForm.code} onChange={(e) => setUploadForm((f) => ({ ...f, code: e.target.value }))} />
+
+                      {/* Género - Botones */}
+                      <div>
+                        <label className="text-xs font-bold text-white block mb-1.5">Género *</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[{v: 'mujer', l: 'Mujer'}, {v: 'hombre', l: 'Hombre'}, {v: 'nino', l: 'Niño'}, {v: 'unisex', l: 'Unisex'}, {v: 'gafas_de_sol', l: 'Gafas de Sol'}].map((g) => (
+                            <button key={g.v} type="button" onClick={() => setUploadForm((f) => ({ ...f, gender: g.v }))} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${uploadForm.gender === g.v ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#0a0a0a] text-[#ccc] border border-[#333] hover:border-[#555]'}`}>{g.l}</button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Estilo - Botones */}
+                      <div>
+                        <label className="text-xs font-bold text-white block mb-1.5">Estilo *</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[{v: 'ovalada', l: 'Ovalada'}, {v: 'cat_eye', l: 'Cat-Eye'}, {v: 'redonda', l: 'Redonda'}, {v: 'cuadrada', l: 'Cuadrada'}, {v: 'aviador', l: 'Aviador'}, {v: 'rectangular', l: 'Rectangular'}, {v: 'wayfarer', l: 'Wayfarer'}, {v: 'clubmaster', l: 'Clubmaster'}, {v: 'media_luna', l: 'Media Luna'}, {v: 'otro', l: 'Otro'}].map((s) => (
+                            <button key={s.v} type="button" onClick={() => setUploadForm((f) => ({ ...f, style: s.v }))} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${uploadForm.style === s.v ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#0a0a0a] text-[#ccc] border border-[#333] hover:border-[#555]'}`}>{s.l}</button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Estado - Botones grandes */}
+                      <div>
+                        <label className="text-xs font-bold text-white block mb-1.5">Estado *</label>
+                        <div className="flex gap-3">
+                          <button type="button" onClick={() => setUploadForm((f) => ({ ...f, status: 'disponible' }))} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${uploadForm.status === 'disponible' ? 'bg-green-600 text-white border-green-500' : 'bg-[#0a0a0a] text-[#888] border border-[#333]'}`}>Disponible</button>
+                          <button type="button" onClick={() => setUploadForm((f) => ({ ...f, status: 'agotado' }))} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${uploadForm.status === 'agotado' ? 'bg-red-600 text-white border-red-500' : 'bg-[#0a0a0a] text-[#888] border border-[#333]'}`}>Agotado</button>
+                        </div>
+                      </div>
+
+                      {/* Código */}
+                      <div>
+                        <label className="text-xs font-bold text-white block mb-1.5">Código (Opcional)</label>
+                        <input className="premium-input text-sm" placeholder="Ej: HD-001" value={uploadForm.code} onChange={(e) => setUploadForm((f) => ({ ...f, code: e.target.value }))} />
                       </div>
                       <button onClick={saveProduct} disabled={loading} className="w-full btn-gold flex items-center justify-center gap-2">
                         {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

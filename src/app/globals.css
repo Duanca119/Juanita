@@ -187,8 +187,9 @@
 
   /* Status badges */
   .badge-disponible { background: #065F46; color: #6EE7B7; }
-  .badge-vendido { background: #7F1D1D; color: #FCA5A5; }
+  .badge-agotado { background: #7F1D1D; color: #FCA5A5; }
   .badge-reservado { background: #78350F; color: #FCD34D; }
+  .badge-vendido { background: #9A3412; color: #FDBA74; }
 
   /* Image upload area */
   .upload-area {
