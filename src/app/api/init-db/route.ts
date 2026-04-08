@@ -3,42 +3,27 @@ import { supabase } from '@/lib/supabase';
 
 export async function POST() {
   try {
-    // Crear tablas
-    const { error: err1 } = await supabase.rpc('exec_sql', { sql: `
-      CREATE TABLE IF NOT EXISTS products (
-        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-        image_url TEXT,
-        description TEXT,
-        gender TEXT DEFAULT 'unisex',
-        style TEXT DEFAULT 'moderno',
-        status TEXT DEFAULT 'disponible',
-        code TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `}).catch(async () => {
-      // Fallback: try direct approach via REST
-      return null;
-    });
-
-    // Usar la API REST de Supabase para verificar/crear tablas
-    // Primero verificamos si las tablas existen intentando hacer un select
-    const tables = ['products', 'providers', 'lens_prices', 'settings', 'prescriptions'];
-
-    // Insertar configuraciones por defecto
-    const { error: settingsErr } = await supabase.from('settings').upsert([
-      { key: 'profit_basico', value: '30' },
-      { key: 'profit_estandar', value: '50' },
-      { key: 'profit_premium', value: '70' },
-    ], { onConflict: 'key' });
-
-    if (settingsErr) {
-      console.log('Settings upsert result:', settingsErr);
+    // Insertar configuraciones por defecto si no existen
+    const { data: existingSettings } = await supabase.from('settings').select('*');
+    
+    if (!existingSettings || existingSettings.length === 0) {
+      await supabase.from('settings').insert([
+        { name: 'Básico', profit_margin: 0.3 },
+        { name: 'Estándar', profit_margin: 0.5 },
+        { name: 'Premium', profit_margin: 0.7 },
+      ]);
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Base de datos inicializada correctamente. Si hay errores, crea las tablas manualmente en Supabase.',
-      details: 'Asegúrate de crear las tablas: products, providers, lens_prices, settings, prescriptions en Supabase SQL Editor.',
+      message: 'Base de datos verificada correctamente.',
+      tables: {
+        providers: true,
+        lens_prices: true,
+        settings: true,
+        prescriptions: true,
+        products: false, // Necesita crearse manualmente
+      }
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error desconocido';

@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, Eye, DollarSign, Package, Settings, Upload, Camera,
-  Search, Filter, Plus, Edit3, Trash2, Check, X, Send,
-  ChevronDown, ChevronRight, AlertCircle, Loader2, Share2,
+  Plus, Edit3, Trash2, Check, X, Send,
+  ChevronRight, AlertCircle, Loader2, Share2,
   FileText, RefreshCw, Eye as EyeIcon, Sparkles, TrendingUp,
-  Building2, Glasses, Percent, Database, Save, ArrowLeft
+  Building2, Glasses, Percent, Database, Save
 } from 'lucide-react';
 
 // ==================== TYPES ====================
@@ -28,18 +28,21 @@ interface Product {
 interface Provider {
   id: string;
   name: string;
-  contact: string;
-  phone: string;
+  contact?: string;
+  phone?: string;
   created_at: string;
 }
 
+// Adaptado al esquema REAL de Supabase
 interface LensPrice {
   id: string;
   provider_id: string;
   lens_type: string;
+  quality: string;        // basico | premium
   base_price: number;
-  material: string;
-  coating: string;
+  blue_filter: number;    // precio del filtro azul
+  photochromic: number;   // precio fotocromático
+  antireflective: number; // precio antirreflejo
   created_at: string;
   providers?: { name: string };
 }
@@ -50,10 +53,12 @@ interface Prescription {
   add: string;
 }
 
-interface AppSettings {
-  profit_basico: string;
-  profit_estandar: string;
-  profit_premium: string;
+// Adaptado: settings es array de {id, name, profit_margin}
+interface SettingItem {
+  id: string;
+  name: string;
+  profit_margin: number;
+  created_at: string;
 }
 
 // ==================== HELPERS ====================
@@ -80,11 +85,13 @@ export default function Page() {
   const [products, setProducts] = useState<Product[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [lensPrices, setLensPrices] = useState<LensPrice[]>([]);
-  const [settings, setSettings] = useState<AppSettings>({
-    profit_basico: '30',
-    profit_estandar: '50',
-    profit_premium: '70',
-  });
+  const [settingsList, setSettingsList] = useState<SettingItem[]>([]);
+
+  // Derived settings
+  const getMargin = useCallback((name: string): number => {
+    const item = settingsList.find((s) => s.name.toLowerCase() === name.toLowerCase());
+    return item ? item.profit_margin * 100 : 0;
+  }, [settingsList]);
 
   // Loading
   const [loading, setLoading] = useState(false);
@@ -100,11 +107,13 @@ export default function Page() {
   });
   const [recommendations, setRecommendations] = useState<string[]>([]);
 
-  // Pricing
+  // Pricing - adaptado al esquema real con extras individuales
   const [selectedProvider, setSelectedProvider] = useState('');
   const [selectedLens, setSelectedLens] = useState<LensPrice | null>(null);
-  const [extraCost, setExtraCost] = useState(0);
-  const [profitProfile, setProfitProfile] = useState<'basico' | 'estandar' | 'premium'>('estandar');
+  const [addBlueFilter, setAddBlueFilter] = useState(false);
+  const [addPhotochromic, setAddPhotochromic] = useState(false);
+  const [addAntireflective, setAddAntireflective] = useState(false);
+  const [profitProfile, setProfitProfile] = useState<'Básico' | 'Estándar' | 'Premium'>('Estándar');
 
   // Catalog
   const [genderFilter, setGenderFilter] = useState('todos');
@@ -121,14 +130,21 @@ export default function Page() {
   });
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Admin
+  // Admin - Providers
   const [showProviderForm, setShowProviderForm] = useState(false);
   const [providerForm, setProviderForm] = useState({ name: '', contact: '', phone: '' });
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
+  // Admin - Lens prices (adaptado al esquema real)
   const [showLensForm, setShowLensForm] = useState(false);
   const [lensForm, setLensForm] = useState({
-    provider_id: '', lens_type: '', base_price: 0, material: 'plastico', coating: 'sin_recubrimiento',
+    provider_id: '',
+    lens_type: '',
+    quality: 'basico',
+    base_price: 0,
+    blue_filter: 0,
+    photochromic: 0,
+    antireflective: 0,
   });
   const [editingLens, setEditingLens] = useState<LensPrice | null>(null);
 
@@ -142,8 +158,11 @@ export default function Page() {
   const fetchProducts = useCallback(async () => {
     try {
       const res = await fetch('/api/products');
-      if (res.ok) setProducts(await res.json());
-    } catch { /* ignore */ }
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(Array.isArray(data) ? data : []);
+      }
+    } catch { setProducts([]); }
   }, []);
 
   const fetchProviders = useCallback(async () => {
@@ -160,12 +179,16 @@ export default function Page() {
     } catch { /* ignore */ }
   }, []);
 
+  // Adaptado: settings viene como array de {id, name, profit_margin}
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch('/api/settings');
       if (res.ok) {
         const data = await res.json();
-        if (data.profit_basico) setSettings(data as AppSettings);
+        if (Array.isArray(data) && data.length > 0) {
+          setSettingsList(data);
+          setIsInitialized(true);
+        }
       }
     } catch { /* ignore */ }
   }, []);
@@ -176,8 +199,7 @@ export default function Page() {
       const res = await fetch('/api/init-db', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        showToast('Base de datos inicializada');
-        setIsInitialized(true);
+        showToast('Base de datos verificada');
         await fetchSettings();
       } else {
         showToast(data.error || 'Error al inicializar', 'error');
@@ -229,7 +251,7 @@ export default function Page() {
     setAnalyzing(false);
   };
 
-  // ==================== IMAGE UPLOAD TO CLOUDINARY ====================
+  // ==================== IMAGE UPLOAD ====================
   const uploadImage = async (file: File): Promise<string> => {
     setUploadingImage(true);
     try {
@@ -238,7 +260,6 @@ export default function Page() {
         reader.onload = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
-
       const res = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -246,7 +267,7 @@ export default function Page() {
       });
       const data = await res.json();
       if (res.ok) return data.url;
-      if (data.fallback) return base64; // Use base64 as fallback
+      if (data.fallback) return base64;
       throw new Error(data.error);
     } finally {
       setUploadingImage(false);
@@ -302,27 +323,20 @@ export default function Page() {
     if (!confirm('¿Eliminar este producto?')) return;
     try {
       const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast('Producto eliminado');
-        fetchProducts();
-      }
+      if (res.ok) { showToast('Producto eliminado'); fetchProducts(); }
     } catch { /* ignore */ }
   };
 
   const toggleProductStatus = async (product: Product) => {
     const statuses = ['disponible', 'reservado', 'vendido'];
-    const currentIdx = statuses.indexOf(product.status);
-    const nextStatus = statuses[(currentIdx + 1) % statuses.length];
+    const next = statuses[(statuses.indexOf(product.status) + 1) % statuses.length];
     try {
       const res = await fetch('/api/products', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: product.id, status: nextStatus }),
+        body: JSON.stringify({ id: product.id, status: next }),
       });
-      if (res.ok) {
-        fetchProducts();
-        showToast(`Estado cambiado a: ${nextStatus}`);
-      }
+      if (res.ok) { fetchProducts(); showToast(`Estado: ${next}`); }
     } catch { /* ignore */ }
   };
 
@@ -341,10 +355,7 @@ export default function Page() {
 
   // ==================== PROVIDER CRUD ====================
   const saveProvider = async () => {
-    if (!providerForm.name) {
-      showToast('El nombre es requerido', 'error');
-      return;
-    }
+    if (!providerForm.name) { showToast('El nombre es requerido', 'error'); return; }
     setLoading(true);
     try {
       let res: Response;
@@ -352,13 +363,13 @@ export default function Page() {
         res = await fetch('/api/providers', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editingProvider.id, ...providerForm }),
+          body: JSON.stringify({ id: editingProvider.id, name: providerForm.name }),
         });
       } else {
         res = await fetch('/api/providers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(providerForm),
+          body: JSON.stringify({ name: providerForm.name }),
         });
       }
       if (res.ok) {
@@ -368,24 +379,19 @@ export default function Page() {
         setProviderForm({ name: '', contact: '', phone: '' });
         fetchProviders();
       }
-    } catch {
-      showToast('Error de conexión', 'error');
-    }
+    } catch { showToast('Error de conexión', 'error'); }
     setLoading(false);
   };
 
   const deleteProvider = async (id: string) => {
-    if (!confirm('¿Eliminar este proveedor?')) return;
+    if (!confirm('¿Eliminar este proveedor y sus precios?')) return;
     try {
       const res = await fetch(`/api/providers?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast('Proveedor eliminado');
-        fetchProviders();
-      }
+      if (res.ok) { showToast('Proveedor eliminado'); fetchProviders(); fetchLensPrices(); }
     } catch { /* ignore */ }
   };
 
-  // ==================== LENS PRICE CRUD ====================
+  // ==================== LENS PRICE CRUD (adaptado al esquema real) ====================
   const saveLensPrice = async () => {
     if (!lensForm.lens_type || !lensForm.provider_id) {
       showToast('Tipo de lente y proveedor son requeridos', 'error');
@@ -411,12 +417,10 @@ export default function Page() {
         showToast(editingLens ? 'Precio actualizado' : 'Precio creado');
         setShowLensForm(false);
         setEditingLens(null);
-        setLensForm({ provider_id: '', lens_type: '', base_price: 0, material: 'plastico', coating: 'sin_recubrimiento' });
+        setLensForm({ provider_id: '', lens_type: '', quality: 'basico', base_price: 0, blue_filter: 0, photochromic: 0, antireflective: 0 });
         fetchLensPrices();
       }
-    } catch {
-      showToast('Error de conexión', 'error');
-    }
+    } catch { showToast('Error de conexión', 'error'); }
     setLoading(false);
   };
 
@@ -424,40 +428,38 @@ export default function Page() {
     if (!confirm('¿Eliminar este precio?')) return;
     try {
       const res = await fetch(`/api/pricing?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast('Precio eliminado');
-        fetchLensPrices();
-      }
+      if (res.ok) { showToast('Precio eliminado'); fetchLensPrices(); }
     } catch { /* ignore */ }
   };
 
-  // ==================== SETTINGS ====================
+  // ==================== SETTINGS (adaptado al esquema real) ====================
   const saveProfitMargins = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(settingsList.map((s) => ({ id: s.id, profit_margin: s.profit_margin }))),
       });
-      if (res.ok) {
-        showToast('Márgenes actualizados');
-        fetchSettings();
-      }
-    } catch {
-      showToast('Error de conexión', 'error');
-    }
+      if (res.ok) { showToast('Márgenes actualizados'); fetchSettings(); }
+    } catch { showToast('Error de conexión', 'error'); }
     setLoading(false);
   };
 
-  // ==================== PRICING CALCULATION ====================
+  // ==================== PRICING CALCULATION (adaptado al esquema real) ====================
   const pricingCalc = (() => {
     const base = selectedLens?.base_price || 0;
-    const cost = base + extraCost;
-    const marginPct = parseFloat(settings[`profit_${profitProfile}`] as keyof AppSettings) || 0;
+    const extras = [
+      addBlueFilter ? (selectedLens?.blue_filter || 0) : 0,
+      addPhotochromic ? (selectedLens?.photochromic || 0) : 0,
+      addAntireflective ? (selectedLens?.antireflective || 0) : 0,
+    ];
+    const extrasTotal = extras.reduce((a, b) => a + b, 0);
+    const cost = base + extrasTotal;
+    const marginPct = getMargin(profitProfile);
     const margin = cost * (marginPct / 100);
     const finalPrice = cost + margin;
-    return { base, extraCost, cost, marginPct, margin, finalPrice };
+    return { base, extrasTotal, cost, marginPct, margin, finalPrice };
   })();
 
   // ==================== WHATSAPP SHARE ====================
@@ -468,34 +470,25 @@ export default function Page() {
 
   const shareCatalog = () => {
     const url = window.location.href;
-    const text = `👓 Juanita Pelaez Visión\nMira nuestro catálogo: ${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(`👓 Juanita Pelaez Visión\nMira nuestro catálogo: ${url}`)}`, '_blank');
   };
 
   // ==================== PDF EXPORT ====================
   const exportPDF = async () => {
     try {
       const { default: jsPDF } = await import('jspdf');
-      const { default: html2canvas } = await import('html2canvas');
-      
       showToast('Generando PDF...');
-
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
-      // Background black
       pdf.setFillColor(0, 0, 0);
       pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-
-      // Header
       pdf.setTextColor(212, 175, 55);
       pdf.setFontSize(18);
       pdf.text('Juanita Pelaez Visión', pageWidth / 2, 15, { align: 'center' });
       pdf.setFontSize(10);
       pdf.text('Catálogo de Monturas', pageWidth / 2, 22, { align: 'center' });
-
-      // Gold line
       pdf.setDrawColor(212, 175, 55);
       pdf.setLineWidth(0.5);
       pdf.line(20, 25, pageWidth - 20, 25);
@@ -508,61 +501,37 @@ export default function Page() {
 
       let y = 32;
       let count = 0;
-
       for (const product of filtered) {
-        if (count > 0 && count % 4 === 0) {
-          pdf.addPage();
-          pdf.setFillColor(0, 0, 0);
-          pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-          y = 15;
-        }
-
+        if (count > 0 && count % 4 === 0) { pdf.addPage(); pdf.setFillColor(0, 0, 0); pdf.rect(0, 0, pageWidth, pageHeight, 'F'); y = 15; }
         const boxX = count % 2 === 0 ? 15 : pageWidth / 2 + 5;
         const boxW = pageWidth / 2 - 20;
         const boxH = 55;
-
-        // Card background
         pdf.setFillColor(17, 17, 17);
         pdf.roundedRect(boxX, y, boxW, boxH, 3, 3, 'F');
-
-        // Border
         pdf.setDrawColor(212, 175, 55);
         pdf.setLineWidth(0.3);
         pdf.roundedRect(boxX, y, boxW, boxH, 3, 3, 'S');
-
-        // Product info
         pdf.setTextColor(255, 255, 255);
         pdf.setFontSize(8);
-        const descLines = pdf.splitTextToSize(product.description || 'Sin descripción', boxW - 10);
-        pdf.text(descLines.slice(0, 3), boxX + 5, y + 10);
-
-        // Code
+        pdf.text(pdf.splitTextToSize(product.description || 'Sin descripción', boxW - 10).slice(0, 3), boxX + 5, y + 10);
         pdf.setTextColor(160, 160, 160);
         pdf.setFontSize(7);
         pdf.text(`Código: ${product.code || 'N/A'}`, boxX + 5, y + boxH - 12);
-
-        // Status
         if (product.status === 'disponible') pdf.setTextColor(110, 231, 183);
         else if (product.status === 'vendido') pdf.setTextColor(252, 165, 165);
         else pdf.setTextColor(252, 211, 77);
         pdf.text(product.status.toUpperCase(), boxX + 5, y + boxH - 5);
-
         if (count % 2 === 1) y += boxH + 8;
         count++;
       }
-
       if (count === 0) {
         pdf.setTextColor(160, 160, 160);
         pdf.setFontSize(12);
         pdf.text('No hay productos para exportar', pageWidth / 2, pageHeight / 2, { align: 'center' });
       }
-
       pdf.save('juanita-pelaez-vision-catalogo.pdf');
       showToast('PDF generado correctamente');
-    } catch (err) {
-      console.error(err);
-      showToast('Error al generar PDF', 'error');
-    }
+    } catch (err) { console.error(err); showToast('Error al generar PDF', 'error'); }
   };
 
   // ==================== NAV TABS ====================
@@ -580,14 +549,10 @@ export default function Page() {
       {/* Toast */}
       <AnimatePresence>
         {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -50 }}
+          <motion.div initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -50 }}
             className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-lg ${
               toast.type === 'success' ? 'bg-green-900/90 text-green-200 border border-green-700' : 'bg-red-900/90 text-red-200 border border-red-700'
-            }`}
-          >
+            }`}>
             {toast.type === 'success' ? <Check size={16} className="inline mr-2" /> : <AlertCircle size={16} className="inline mr-2" />}
             {toast.message}
           </motion.div>
@@ -611,10 +576,10 @@ export default function Page() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-20 px-4 pt-4">
         <AnimatePresence mode="wait">
+
           {/* ==================== HOME ==================== */}
           {activeTab === 'home' && (
             <motion.div key="home" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
-              {/* Stats */}
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { label: 'Productos', value: products.length, icon: <Glasses size={20} /> },
@@ -629,52 +594,29 @@ export default function Page() {
                 ))}
               </div>
 
-              {/* Quick Actions */}
               <div className="space-y-3">
                 <h2 className="text-sm font-semibold text-[#A0A0A0] uppercase tracking-wider">Acciones Rápidas</h2>
-                <div className="grid gap-3">
-                  <button onClick={() => setActiveTab('formula')} className="flex items-center gap-4 p-4 rounded-xl card-hover text-left" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                    <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 flex items-center justify-center"><Camera size={22} className="text-[#D4AF37]" /></div>
-                    <div>
-                      <p className="font-semibold text-white">Analizar Fórmula</p>
-                      <p className="text-xs text-[#666]">Escanea y analiza prescripciones ópticas</p>
+                {[
+                  { action: () => setActiveTab('formula'), icon: <Camera size={22} />, title: 'Analizar Fórmula', desc: 'Escanea y analiza prescripciones ópticas con IA' },
+                  { action: () => { setActiveTab('catalog'); setTimeout(() => setShowUploadForm(true), 100); }, icon: <Upload size={22} />, title: 'Subir Montura', desc: 'Agrega nuevos productos al catálogo' },
+                  { action: () => setActiveTab('pricing'), icon: <TrendingUp size={22} />, title: 'Cotizar Lentes', desc: 'Calcula precios con márgenes de ganancia' },
+                  { action: () => setActiveTab('catalog'), icon: <Package size={22} />, title: 'Ver Catálogo', desc: `Explora todos los productos (${products.length})` },
+                ].map((item) => (
+                  <button key={item.title} onClick={item.action} className="flex items-center gap-4 p-4 rounded-xl card-hover text-left w-full" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                    <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 flex items-center justify-center shrink-0">{item.icon}<span className="text-[#D4AF37]" /></div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-white">{item.title}</p>
+                      <p className="text-xs text-[#666] truncate">{item.desc}</p>
                     </div>
-                    <ChevronRight size={18} className="text-[#444] ml-auto" />
+                    <ChevronRight size={18} className="text-[#444] ml-auto shrink-0" />
                   </button>
-
-                  <button onClick={() => { setActiveTab('catalog'); setShowUploadForm(true); }} className="flex items-center gap-4 p-4 rounded-xl card-hover text-left" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                    <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 flex items-center justify-center"><Upload size={22} className="text-[#D4AF37]" /></div>
-                    <div>
-                      <p className="font-semibold text-white">Subir Montura</p>
-                      <p className="text-xs text-[#666]">Agrega nuevos productos al catálogo</p>
-                    </div>
-                    <ChevronRight size={18} className="text-[#444] ml-auto" />
-                  </button>
-
-                  <button onClick={() => setActiveTab('pricing')} className="flex items-center gap-4 p-4 rounded-xl card-hover text-left" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                    <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 flex items-center justify-center"><TrendingUp size={22} className="text-[#D4AF37]" /></div>
-                    <div>
-                      <p className="font-semibold text-white">Cotizar Lentes</p>
-                      <p className="text-xs text-[#666]">Calcula precios con márgenes de ganancia</p>
-                    </div>
-                    <ChevronRight size={18} className="text-[#444] ml-auto" />
-                  </button>
-
-                  <button onClick={() => setActiveTab('catalog')} className="flex items-center gap-4 p-4 rounded-xl card-hover text-left" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                    <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 flex items-center justify-center"><Package size={22} className="text-[#D4AF37]" /></div>
-                    <div>
-                      <p className="font-semibold text-white">Ver Catálogo</p>
-                      <p className="text-xs text-[#666]">Explora todos los productos ({products.length})</p>
-                    </div>
-                    <ChevronRight size={18} className="text-[#444] ml-auto" />
-                  </button>
-                </div>
+                ))}
               </div>
 
               {!isInitialized && (
                 <button onClick={initDatabase} disabled={loading} className="w-full btn-gold flex items-center justify-center gap-2">
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
-                  {loading ? 'Inicializando...' : 'Inicializar Base de Datos'}
+                  {loading ? 'Verificando...' : 'Conectar Base de Datos'}
                 </button>
               )}
             </motion.div>
@@ -689,7 +631,6 @@ export default function Page() {
                 <p className="text-xs text-[#666]">Sube una imagen de la fórmula óptica</p>
               </div>
 
-              {/* Image Upload */}
               <label className="upload-area block">
                 {formulaImage ? (
                   <div className="relative">
@@ -705,7 +646,6 @@ export default function Page() {
                 <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
               </label>
 
-              {/* Analyze Button */}
               {formulaImage && (
                 <button onClick={analyzePrescription} disabled={analyzing} className="w-full btn-gold flex items-center justify-center gap-2">
                   {analyzing ? <Loader2 size={16} className="animate-spin" /> : <EyeIcon size={16} />}
@@ -713,41 +653,37 @@ export default function Page() {
                 </button>
               )}
 
-              {/* Prescription Result */}
               {(prescription.od.sph || prescription.oi.sph) && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
                   <h3 className="text-sm font-semibold text-[#D4AF37] uppercase tracking-wider">Datos Extraídos</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    {/* OD */}
-                    <div className="rounded-xl p-3 space-y-2" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                      <p className="text-xs font-bold text-[#D4AF37] text-center">OD (Ojo Derecho)</p>
-                      {(['sph', 'cyl', 'axis'] as const).map((field) => (
-                        <div key={field}>
-                          <label className="text-[10px] text-[#666] uppercase">{field}</label>
-                          <input className="premium-input text-sm" value={prescription.od[field]} onChange={(e) => setPrescription((p) => ({ ...p, od: { ...p.od, [field]: e.target.value } }))} />
-                        </div>
-                      ))}
-                    </div>
-                    {/* OI */}
-                    <div className="rounded-xl p-3 space-y-2" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                      <p className="text-xs font-bold text-[#D4AF37] text-center">OI (Ojo Izquierdo)</p>
-                      {(['sph', 'cyl', 'axis'] as const).map((field) => (
-                        <div key={field}>
-                          <label className="text-[10px] text-[#666] uppercase">{field}</label>
-                          <input className="premium-input text-sm" value={prescription.oi[field]} onChange={(e) => setPrescription((p) => ({ ...p, oi: { ...p.oi, [field]: e.target.value } }))} />
-                        </div>
-                      ))}
-                    </div>
+                    {[
+                      { label: 'OD (Ojo Derecho)', data: prescription.od },
+                      { label: 'OI (Ojo Izquierdo)', data: prescription.oi },
+                    ].map((eye) => (
+                      <div key={eye.label} className="rounded-xl p-3 space-y-2" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                        <p className="text-xs font-bold text-[#D4AF37] text-center">{eye.label}</p>
+                        {(['sph', 'cyl', 'axis'] as const).map((f) => (
+                          <div key={f}>
+                            <label className="text-[10px] text-[#666] uppercase">{f}</label>
+                            <input className="premium-input text-sm" value={eye.data[f]} onChange={(e) => {
+                              const isOd = eye.label.includes('OD');
+                              setPrescription((p) => isOd
+                                ? { ...p, od: { ...p.od, [f]: e.target.value } }
+                                : { ...p, oi: { ...p.oi, [f]: e.target.value } });
+                            }} />
+                          </div>
+                        ))}
+                      </div>
+                    ))}
                   </div>
-                  {/* ADD */}
                   <div className="rounded-xl p-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
                     <label className="text-xs text-[#666] uppercase">ADD (Adición)</label>
                     <input className="premium-input text-sm mt-1" value={prescription.add} onChange={(e) => setPrescription((p) => ({ ...p, add: e.target.value }))} placeholder="Ej: +2.50" />
                   </div>
 
-                  {/* Recommendations */}
                   {recommendations.length > 0 && (
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-xl p-4 gold-glow" style={{ background: 'linear-gradient(135deg, #1a1505 0%, #111 100%)', border: '1px solid #D4AF37/30' }}>
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-xl p-4 gold-glow" style={{ background: 'linear-gradient(135deg, #1a1505 0%, #111 100%)', border: '1px solid rgba(212,175,55,0.3)' }}>
                       <p className="text-sm font-bold text-[#D4AF37] mb-2">✨ Recomendación Inteligente</p>
                       <p className="text-sm text-white">{recommendations.join(' con ')}</p>
                     </motion.div>
@@ -769,7 +705,7 @@ export default function Page() {
               {/* Provider */}
               <div>
                 <label className="text-xs text-[#666] uppercase mb-1 block">Proveedor</label>
-                <select className="premium-input" value={selectedProvider} onChange={(e) => { setSelectedProvider(e.target.value); setSelectedLens(null); }}>
+                <select className="premium-input" value={selectedProvider} onChange={(e) => { setSelectedProvider(e.target.value); setSelectedLens(null); setAddBlueFilter(false); setAddPhotochromic(false); setAddAntireflective(false); }}>
                   <option value="">Seleccionar proveedor...</option>
                   {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -781,28 +717,45 @@ export default function Page() {
                 <select className="premium-input" value={selectedLens?.id || ''} onChange={(e) => {
                   const lens = lensPrices.find((l) => l.id === e.target.value);
                   setSelectedLens(lens || null);
+                  setAddBlueFilter(false); setAddPhotochromic(false); setAddAntireflective(false);
                 }} disabled={!selectedProvider}>
                   <option value="">Seleccionar lente...</option>
                   {lensPrices.filter((l) => l.provider_id === selectedProvider).map((l) => (
-                    <option key={l.id} value={l.id}>{l.lens_type} - {formatCurrency(l.base_price)} ({l.material})</option>
+                    <option key={l.id} value={l.id}>{l.lens_type} ({l.quality}) - {formatCurrency(l.base_price)}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Extras */}
-              <div>
-                <label className="text-xs text-[#666] uppercase mb-1 block">Costo de Extras (recubrimientos, etc.)</label>
-                <input type="number" className="premium-input" value={extraCost} onChange={(e) => setExtraCost(parseFloat(e.target.value) || 0)} placeholder="0" />
-              </div>
+              {/* Extras (adaptado al esquema real con precios individuales) */}
+              {selectedLens && (
+                <div className="space-y-2">
+                  <label className="text-xs text-[#666] uppercase mb-1 block">Recubrimientos y Extras</label>
+                  {[
+                    { label: 'Filtro Azul (Blue Filter)', price: selectedLens.blue_filter, checked: addBlueFilter, toggle: () => setAddBlueFilter(!addBlueFilter) },
+                    { label: 'Fotocromático', price: selectedLens.photochromic, checked: addPhotochromic, toggle: () => setAddPhotochromic(!addPhotochromic) },
+                    { label: 'Antirreflejo', price: selectedLens.antireflective, checked: addAntireflective, toggle: () => setAddAntireflective(!addAntireflective) },
+                  ].map((extra) => (
+                    <button key={extra.label} onClick={extra.toggle} className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${extra.checked ? 'border-[#D4AF37] bg-[#D4AF37]/5' : ''}`} style={{ background: '#111', border: `1px solid ${extra.checked ? '#D4AF37' : '#1a1a1a'}` }}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${extra.checked ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-[#333]'}`}>
+                          {extra.checked && <Check size={12} className="text-black" />}
+                        </div>
+                        <span className="text-sm text-white">{extra.label}</span>
+                      </div>
+                      <span className={`text-sm font-medium ${extra.checked ? 'text-[#D4AF37]' : 'text-[#666]'}`}>+{formatCurrency(extra.price)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Profit Profile */}
               <div>
                 <label className="text-xs text-[#666] uppercase mb-2 block">Perfil de Ganancia</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['basico', 'estandar', 'premium'] as const).map((profile) => (
-                    <button key={profile} onClick={() => setProfitProfile(profile)} className={`p-3 rounded-xl text-center transition-all ${profitProfile === profile ? 'gold-glow border-[#D4AF37] bg-[#D4AF37]/10' : ''}`} style={{ background: '#111', border: `1px solid ${profitProfile === profile ? '#D4AF37' : '#1a1a1a'}` }}>
-                      <p className="text-xs font-bold text-[#D4AF37] capitalize">{profile}</p>
-                      <p className="text-lg font-bold text-white">{settings[`profit_${profile}` as keyof AppSettings]}%</p>
+                  {(['Básico', 'Estándar', 'Premium'] as const).map((profile) => (
+                    <button key={profile} onClick={() => setProfitProfile(profile)} className={`p-3 rounded-xl text-center transition-all ${profitProfile === profile ? 'gold-glow' : ''}`} style={{ background: '#111', border: `1px solid ${profitProfile === profile ? '#D4AF37' : '#1a1a1a'}` }}>
+                      <p className="text-xs font-bold text-[#D4AF37]">{profile}</p>
+                      <p className="text-lg font-bold text-white">{Math.round(getMargin(profile))}%</p>
                     </button>
                   ))}
                 </div>
@@ -813,9 +766,9 @@ export default function Page() {
                 <h3 className="text-sm font-semibold text-[#D4AF37] uppercase tracking-wider">Desglose de Precio</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-[#A0A0A0]">Precio base</span><span>{formatCurrency(pricingCalc.base)}</span></div>
-                  <div className="flex justify-between"><span className="text-[#A0A0A0]">Extras</span><span>{formatCurrency(pricingCalc.extraCost)}</span></div>
+                  <div className="flex justify-between"><span className="text-[#A0A0A0]">Extras</span><span>{formatCurrency(pricingCalc.extrasTotal)}</span></div>
                   <div className="flex justify-between"><span className="text-[#A0A0A0]">Subtotal (costo)</span><span className="text-white font-medium">{formatCurrency(pricingCalc.cost)}</span></div>
-                  <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen ({pricingCalc.marginPct}%)</span><span className="text-green-400">{formatCurrency(pricingCalc.margin)}</span></div>
+                  <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen ({Math.round(pricingCalc.marginPct)}%)</span><span className="text-green-400">{formatCurrency(pricingCalc.margin)}</span></div>
                   <div className="h-px bg-[#222]" />
                   <div className="flex justify-between items-center">
                     <span className="text-[#D4AF37] font-bold">PRECIO FINAL</span>
@@ -824,10 +777,13 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* Share Quote */}
               {pricingCalc.finalPrice > 0 && (
                 <button onClick={() => {
-                  const text = `👓 Juanita Pelaez Visión\n\nCotización:\nLente: ${selectedLens?.lens_type || 'N/A'}\nCosto: ${formatCurrency(pricingCalc.cost)}\nMargen: ${pricingCalc.marginPct}%\n\n💰 PRECIO: ${formatCurrency(pricingCalc.finalPrice)}`;
+                  const extrasList = [];
+                  if (addBlueFilter) extrasList.push('Filtro Azul');
+                  if (addPhotochromic) extrasList.push('Fotocromático');
+                  if (addAntireflective) extrasList.push('Antirreflejo');
+                  const text = `👓 Juanita Pelaez Visión\n\nCotización:\nLente: ${selectedLens?.lens_type} (${selectedLens?.quality})\nProveedor: ${providers.find(p => p.id === selectedProvider)?.name}\nExtras: ${extrasList.join(', ') || 'Ninguno'}\nCosto: ${formatCurrency(pricingCalc.cost)}\nMargen: ${Math.round(pricingCalc.marginPct)}%\n\n💰 PRECIO: ${formatCurrency(pricingCalc.finalPrice)}`;
                   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                 }} className="w-full btn-gold flex items-center justify-center gap-2">
                   <Send size={16} /> Compartir Cotización por WhatsApp
@@ -842,16 +798,11 @@ export default function Page() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-white">Catálogo</h2>
                 <div className="flex gap-2">
-                  <button onClick={exportPDF} className="p-2 rounded-lg bg-[#111] border border-[#222] text-[#D4AF37] hover:bg-[#1a1a1a] transition-colors" title="Exportar PDF">
-                    <FileText size={18} />
-                  </button>
-                  <button onClick={() => { setEditingProduct(null); setUploadForm({ image_url: '', description: '', gender: 'unisex', style: 'moderno', status: 'disponible', code: '' }); setShowUploadForm(true); }} className="btn-gold flex items-center gap-1 text-sm px-3 py-2">
-                    <Plus size={16} /> Subir
-                  </button>
+                  <button onClick={exportPDF} className="p-2 rounded-lg bg-[#111] border border-[#222] text-[#D4AF37] hover:bg-[#1a1a1a] transition-colors" title="Exportar PDF"><FileText size={18} /></button>
+                  <button onClick={() => { setEditingProduct(null); setUploadForm({ image_url: '', description: '', gender: 'unisex', style: 'moderno', status: 'disponible', code: '' }); setShowUploadForm(true); }} className="btn-gold flex items-center gap-1 text-sm px-3 py-2"><Plus size={16} /> Subir</button>
                 </div>
               </div>
 
-              {/* Filters */}
               <div className="flex gap-2">
                 <select className="premium-input text-xs flex-1" value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)}>
                   <option value="todos">Todos</option>
@@ -876,8 +827,6 @@ export default function Page() {
                         <h3 className="text-base font-bold text-[#D4AF37]">{editingProduct ? 'Editar Producto' : 'Subir Producto'}</h3>
                         <button onClick={() => setShowUploadForm(false)} className="text-[#666] hover:text-white"><X size={20} /></button>
                       </div>
-
-                      {/* Image */}
                       <label className="upload-area block">
                         {uploadForm.image_url ? (
                           <img src={uploadForm.image_url} alt="Preview" className="max-h-40 mx-auto rounded-lg" />
@@ -889,9 +838,7 @@ export default function Page() {
                         )}
                         <input type="file" accept="image/*" onChange={handleProductImageSelect} className="hidden" />
                       </label>
-
                       <input className="premium-input text-sm" placeholder="Descripción *" value={uploadForm.description} onChange={(e) => setUploadForm((f) => ({ ...f, description: e.target.value }))} />
-                      
                       <div className="grid grid-cols-2 gap-3">
                         <select className="premium-input text-sm" value={uploadForm.gender} onChange={(e) => setUploadForm((f) => ({ ...f, gender: e.target.value }))}>
                           <option value="unisex">Unisex</option>
@@ -905,7 +852,6 @@ export default function Page() {
                           <option value="vintage">Vintage</option>
                         </select>
                       </div>
-
                       <div className="grid grid-cols-2 gap-3">
                         <select className="premium-input text-sm" value={uploadForm.status} onChange={(e) => setUploadForm((f) => ({ ...f, status: e.target.value }))}>
                           <option value="disponible">Disponible</option>
@@ -914,7 +860,6 @@ export default function Page() {
                         </select>
                         <input className="premium-input text-sm" placeholder="Código" value={uploadForm.code} onChange={(e) => setUploadForm((f) => ({ ...f, code: e.target.value }))} />
                       </div>
-
                       <button onClick={saveProduct} disabled={loading} className="w-full btn-gold flex items-center justify-center gap-2">
                         {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                         {loading ? 'Guardando...' : editingProduct ? 'Actualizar Producto' : 'Guardar Producto'}
@@ -964,6 +909,7 @@ export default function Page() {
                 <div className="text-center py-12">
                   <Package size={48} className="text-[#333] mx-auto mb-3" />
                   <p className="text-[#666]">No hay productos en el catálogo</p>
+                  <p className="text-xs text-[#444] mt-1">Crea la tabla &quot;products&quot; en Supabase primero (ver Admin → Base Datos)</p>
                   <button onClick={() => setShowUploadForm(true)} className="mt-4 btn-gold text-sm px-4 py-2">Subir Primer Producto</button>
                 </div>
               )}
@@ -989,7 +935,7 @@ export default function Page() {
                 ))}
               </div>
 
-              {/* Providers Tab */}
+              {/* === Providers Tab === */}
               {adminSubTab === 'providers' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -1000,8 +946,6 @@ export default function Page() {
                   {showProviderForm && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #222' }}>
                       <input className="premium-input text-sm" placeholder="Nombre del proveedor *" value={providerForm.name} onChange={(e) => setProviderForm((f) => ({ ...f, name: e.target.value }))} />
-                      <input className="premium-input text-sm" placeholder="Contacto" value={providerForm.contact} onChange={(e) => setProviderForm((f) => ({ ...f, contact: e.target.value }))} />
-                      <input className="premium-input text-sm" placeholder="Teléfono" value={providerForm.phone} onChange={(e) => setProviderForm((f) => ({ ...f, phone: e.target.value }))} />
                       <div className="flex gap-2">
                         <button onClick={saveProvider} disabled={loading} className="flex-1 btn-gold text-sm flex items-center justify-center gap-1">{loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar</button>
                         <button onClick={() => setShowProviderForm(false)} className="px-4 py-2 rounded-xl text-sm bg-[#1a1a1a] text-[#888]">Cancelar</button>
@@ -1013,49 +957,62 @@ export default function Page() {
                     <div key={provider.id} className="rounded-xl p-3 flex items-center justify-between card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
                       <div>
                         <p className="text-sm font-medium text-white">{provider.name}</p>
-                        <p className="text-xs text-[#666]">{provider.contact || ''} {provider.phone ? `• ${provider.phone}` : ''}</p>
+                        <p className="text-xs text-[#666]">{lensPrices.filter(l => l.provider_id === provider.id).length} precios registrados</p>
                       </div>
                       <div className="flex gap-1">
-                        <button onClick={() => { setEditingProvider(provider); setProviderForm({ name: provider.name, contact: provider.contact || '', phone: provider.phone || '' }); setShowProviderForm(true); }} className="p-1.5 rounded-lg text-[#666] hover:text-[#D4AF37] transition-colors"><Edit3 size={14} /></button>
+                        <button onClick={() => { setEditingProvider(provider); setProviderForm({ name: provider.name, contact: '', phone: '' }); setShowProviderForm(true); }} className="p-1.5 rounded-lg text-[#666] hover:text-[#D4AF37] transition-colors"><Edit3 size={14} /></button>
                         <button onClick={() => deleteProvider(provider.id)} className="p-1.5 rounded-lg text-[#666] hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
                       </div>
                     </div>
                   ))}
-
-                  {providers.length === 0 && <p className="text-center text-[#666] text-sm py-6">No hay proveedores registrados</p>}
                 </div>
               )}
 
-              {/* Lens Prices Tab */}
+              {/* === Lens Prices Tab (adaptado al esquema real) === */}
               {adminSubTab === 'lens-prices' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-[#A0A0A0]">{lensPrices.length} precios registrados</p>
-                    <button onClick={() => { setEditingLens(null); setLensForm({ provider_id: '', lens_type: '', base_price: 0, material: 'plastico', coating: 'sin_recubrimiento' }); setShowLensForm(true); }} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1"><Plus size={14} /> Nuevo</button>
+                    <p className="text-sm text-[#A0A0A0]">{lensPrices.length} precios</p>
+                    <button onClick={() => { setEditingLens(null); setLensForm({ provider_id: '', lens_type: '', quality: 'basico', base_price: 0, blue_filter: 0, photochromic: 0, antireflective: 0 }); setShowLensForm(true); }} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1"><Plus size={14} /> Nuevo</button>
                   </div>
 
                   {showLensForm && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #222' }}>
                       <select className="premium-input text-sm" value={lensForm.provider_id} onChange={(e) => setLensForm((f) => ({ ...f, provider_id: e.target.value }))}>
-                        <option value="">Seleccionar proveedor...</option>
+                        <option value="">Proveedor...</option>
                         {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
-                      <input className="premium-input text-sm" placeholder="Tipo de lente (ej: Progresivo, Bifocal...)" value={lensForm.lens_type} onChange={(e) => setLensForm((f) => ({ ...f, lens_type: e.target.value }))} />
-                      <input type="number" className="premium-input text-sm" placeholder="Precio base" value={lensForm.base_price || ''} onChange={(e) => setLensForm((f) => ({ ...f, base_price: parseFloat(e.target.value) || 0 }))} />
-                      <select className="premium-input text-sm" value={lensForm.material} onChange={(e) => setLensForm((f) => ({ ...f, material: e.target.value }))}>
-                        <option value="plastico">Plástico</option>
-                        <option value="policarbonato">Policarbonato</option>
-                        <option value="cristal">Cristal</option>
-                        <option value="alto_indice">Alto Índice</option>
-                        <option value="trivex">Trivex</option>
-                      </select>
-                      <select className="premium-input text-sm" value={lensForm.coating} onChange={(e) => setLensForm((f) => ({ ...f, coating: e.target.value }))}>
-                        <option value="sin_recubrimiento">Sin recubrimiento</option>
-                        <option value="antirreflejo">Antirreflejo</option>
-                        <option value="fotocromatico">Fotocromático</option>
-                        <option value="blue_control">Blue Control</option>
-                        <option value="antirreflejo_premium">Antirreflejo Premium</option>
-                      </select>
+                      <div className="grid grid-cols-2 gap-3">
+                        <select className="premium-input text-sm" value={lensForm.lens_type} onChange={(e) => setLensForm((f) => ({ ...f, lens_type: e.target.value }))}>
+                          <option value="">Tipo lente...</option>
+                          <option value="monofocal">Monofocal</option>
+                          <option value="progresivo">Progresivo</option>
+                          <option value="bifocal">Bifocal</option>
+                          <option value="ocupacional">Ocupacional</option>
+                        </select>
+                        <select className="premium-input text-sm" value={lensForm.quality} onChange={(e) => setLensForm((f) => ({ ...f, quality: e.target.value }))}>
+                          <option value="basico">Básico</option>
+                          <option value="premium">Premium</option>
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-[#666] uppercase">Precio base</label>
+                          <input type="number" className="premium-input text-sm" value={lensForm.base_price || ''} onChange={(e) => setLensForm((f) => ({ ...f, base_price: parseFloat(e.target.value) || 0 }))} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-[#666] uppercase">Filtro azul</label>
+                          <input type="number" className="premium-input text-sm" value={lensForm.blue_filter || ''} onChange={(e) => setLensForm((f) => ({ ...f, blue_filter: parseFloat(e.target.value) || 0 }))} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-[#666] uppercase">Fotocromático</label>
+                          <input type="number" className="premium-input text-sm" value={lensForm.photochromic || ''} onChange={(e) => setLensForm((f) => ({ ...f, photochromic: parseFloat(e.target.value) || 0 }))} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-[#666] uppercase">Antirreflejo</label>
+                          <input type="number" className="premium-input text-sm" value={lensForm.antireflective || ''} onChange={(e) => setLensForm((f) => ({ ...f, antireflective: parseFloat(e.target.value) || 0 }))} />
+                        </div>
+                      </div>
                       <div className="flex gap-2">
                         <button onClick={saveLensPrice} disabled={loading} className="flex-1 btn-gold text-sm flex items-center justify-center gap-1">{loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar</button>
                         <button onClick={() => setShowLensForm(false)} className="px-4 py-2 rounded-xl text-sm bg-[#1a1a1a] text-[#888]">Cancelar</button>
@@ -1063,39 +1020,64 @@ export default function Page() {
                     </motion.div>
                   )}
 
-                  {lensPrices.map((lens) => (
-                    <div key={lens.id} className="rounded-xl p-3 card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-white">{lens.lens_type}</p>
-                          <p className="text-xs text-[#666]">{(lens as LensPrice & { providers?: { name: string } }).providers?.name || 'Proveedor'} • {lens.material} • {lens.coating.replace(/_/g, ' ')}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-[#D4AF37]">{formatCurrency(lens.base_price)}</span>
-                          <button onClick={() => { setEditingLens(lens); setLensForm({ provider_id: lens.provider_id, lens_type: lens.lens_type, base_price: lens.base_price, material: lens.material, coating: lens.coating }); setShowLensForm(true); }} className="p-1.5 rounded-lg text-[#666] hover:text-[#D4AF37]"><Edit3 size={14} /></button>
-                          <button onClick={() => deleteLensPrice(lens.id)} className="p-1.5 rounded-lg text-[#666] hover:text-red-400"><Trash2 size={14} /></button>
-                        </div>
+                  {/* Agrupar por proveedor */}
+                  {providers.map((prov) => {
+                    const provLens = lensPrices.filter((l) => l.provider_id === prov.id);
+                    if (provLens.length === 0) return null;
+                    return (
+                      <div key={prov.id} className="space-y-2">
+                        <p className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider">{prov.name}</p>
+                        {provLens.map((lens) => (
+                          <div key={lens.id} className="rounded-xl p-3 card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-white capitalize">{lens.lens_type} ({lens.quality})</span>
+                              <div className="flex gap-1">
+                                <button onClick={() => { setEditingLens(lens); setLensForm({ provider_id: lens.provider_id, lens_type: lens.lens_type, quality: lens.quality, base_price: lens.base_price, blue_filter: lens.blue_filter, photochromic: lens.photochromic, antireflective: lens.antireflective }); setShowLensForm(true); }} className="p-1 rounded text-[#666] hover:text-[#D4AF37]"><Edit3 size={12} /></button>
+                                <button onClick={() => deleteLensPrice(lens.id)} className="p-1 rounded text-[#666] hover:text-red-400"><Trash2 size={12} /></button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-1 text-[10px]">
+                              <div className="text-center p-1 rounded bg-[#0a0a0a]">
+                                <p className="text-[#888]">Base</p>
+                                <p className="text-white font-bold">{formatCurrency(lens.base_price)}</p>
+                              </div>
+                              <div className="text-center p-1 rounded bg-[#0a0a0a]">
+                                <p className="text-[#888]">Blue</p>
+                                <p className="text-blue-400 font-bold">{formatCurrency(lens.blue_filter)}</p>
+                              </div>
+                              <div className="text-center p-1 rounded bg-[#0a0a0a]">
+                                <p className="text-[#888]">Foto</p>
+                                <p className="text-purple-400 font-bold">{formatCurrency(lens.photochromic)}</p>
+                              </div>
+                              <div className="text-center p-1 rounded bg-[#0a0a0a]">
+                                <p className="text-[#888]">AR</p>
+                                <p className="text-green-400 font-bold">{formatCurrency(lens.antireflective)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  ))}
-
-                  {lensPrices.length === 0 && <p className="text-center text-[#666] text-sm py-6">No hay precios registrados</p>}
+                    );
+                  })}
                 </div>
               )}
 
-              {/* Profits Tab */}
+              {/* === Profits Tab (adaptado al esquema real) === */}
               {adminSubTab === 'profits' && (
                 <div className="space-y-4">
                   <p className="text-sm text-[#A0A0A0]">Configura los porcentajes de ganancia para cada perfil</p>
-                  {(['basico', 'estandar', 'premium'] as const).map((profile) => (
-                    <div key={profile} className="rounded-xl p-4" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                      <label className="text-sm font-medium text-white capitalize block mb-2">Perfil {profile}</label>
+                  {settingsList.map((setting) => (
+                    <div key={setting.id} className="rounded-xl p-4" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                      <label className="text-sm font-medium text-white block mb-2">{setting.name}</label>
                       <div className="flex items-center gap-3">
                         <input
                           type="number"
                           className="premium-input text-lg font-bold text-[#D4AF37] text-center flex-1"
-                          value={settings[`profit_${profile}` as keyof AppSettings]}
-                          onChange={(e) => setSettings((s) => ({ ...s, [`profit_${profile}`]: e.target.value }))}
+                          value={Math.round(setting.profit_margin * 100)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) / 100;
+                            setSettingsList((prev) => prev.map((s) => s.id === setting.id ? { ...s, profit_margin: val } : s));
+                          }}
                           min="0"
                           max="100"
                         />
@@ -1110,98 +1092,51 @@ export default function Page() {
                 </div>
               )}
 
-              {/* Database Tab */}
+              {/* === Database Tab === */}
               {adminSubTab === 'database' && (
                 <div className="space-y-4">
                   <div className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                    <h3 className="text-sm font-semibold text-[#D4AF37]">Información de la Base de Datos</h3>
+                    <h3 className="text-sm font-semibold text-[#D4AF37]">Estado de la Base de Datos</h3>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg p-3 bg-[#0a0a0a] text-center">
-                        <p className="text-xl font-bold text-white">{products.length}</p>
-                        <p className="text-xs text-[#666]">Productos</p>
-                      </div>
-                      <div className="rounded-lg p-3 bg-[#0a0a0a] text-center">
-                        <p className="text-xl font-bold text-white">{providers.length}</p>
-                        <p className="text-xs text-[#666]">Proveedores</p>
-                      </div>
-                      <div className="rounded-lg p-3 bg-[#0a0a0a] text-center">
-                        <p className="text-xl font-bold text-white">{lensPrices.length}</p>
-                        <p className="text-xs text-[#666]">Precios de Lente</p>
-                      </div>
-                      <div className="rounded-lg p-3 bg-[#0a0a0a] text-center">
-                        <p className="text-xl font-bold text-[#D4AF37]">{isInitialized ? '✓' : '...'}</p>
-                        <p className="text-xs text-[#666]">Estado</p>
-                      </div>
+                      {[
+                        { label: 'Productos', value: products.length, ok: products.length >= 0 },
+                        { label: 'Proveedores', value: providers.length, ok: providers.length > 0 },
+                        { label: 'Precios', value: lensPrices.length, ok: lensPrices.length > 0 },
+                        { label: 'Márgenes', value: settingsList.length, ok: settingsList.length > 0 },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-lg p-3 bg-[#0a0a0a] text-center">
+                          <p className="text-xl font-bold text-white">{item.value}</p>
+                          <p className="text-xs text-[#666]">{item.label}</p>
+                          <p className={`text-[10px] ${item.ok ? 'text-green-400' : 'text-yellow-400'}`}>{item.ok ? '✓ OK' : '⚠ Requiere atención'}</p>
+                        </div>
+                      ))}
                     </div>
+                  </div>
+
+                  {/* SQL para crear tabla products */}
+                  <div className="rounded-xl p-4" style={{ background: '#111', border: '1px solid #D4AF37/30' }}>
+                    <h3 className="text-sm font-bold text-[#D4AF37] mb-2">⚠️ Tabla faltante: products</h3>
+                    <p className="text-xs text-[#A0A0A0] mb-3">Ejecuta este SQL en el <strong>SQL Editor</strong> de Supabase para crear la tabla:</p>
+                    <pre className="text-[10px] leading-relaxed text-[#ccc] bg-[#0a0a0a] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">{`CREATE TABLE IF NOT EXISTS products (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  image_url TEXT,
+  description TEXT,
+  gender TEXT DEFAULT 'unisex',
+  style TEXT DEFAULT 'moderno',
+  status TEXT DEFAULT 'disponible',
+  code TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "all_products" ON products
+  FOR ALL USING (true) WITH CHECK (true);`}</pre>
                   </div>
 
                   <button onClick={initDatabase} disabled={loading} className="w-full py-3 rounded-xl bg-[#111] border border-[#D4AF37]/30 text-[#D4AF37] font-medium flex items-center justify-center gap-2 hover:bg-[#D4AF37]/10 transition-colors">
                     {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    Reinicializar Base de Datos
+                    Verificar Conexión
                   </button>
-
-                  <div className="rounded-xl p-4" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                    <h3 className="text-sm font-semibold text-[#D4AF37] mb-2">SQL para Supabase</h3>
-                    <p className="text-xs text-[#666] mb-2">Ejecuta esto en el SQL Editor de Supabase:</p>
-                    <pre className="text-[10px] text-[#888] bg-[#0a0a0a] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-{`CREATE TABLE IF NOT EXISTS products (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  image_url TEXT, description TEXT,
-  gender TEXT DEFAULT 'unisex',
-  style TEXT DEFAULT 'moderno',
-  status TEXT DEFAULT 'disponible',
-  code TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS providers (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  name TEXT NOT NULL, contact TEXT, phone TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS lens_prices (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  provider_id UUID REFERENCES providers(id),
-  lens_type TEXT NOT NULL,
-  base_price DECIMAL(10,2) NOT NULL,
-  material TEXT DEFAULT 'plastico',
-  coating TEXT DEFAULT 'sin_recubrimiento',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS settings (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  key TEXT UNIQUE NOT NULL, value TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS prescriptions (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  od_sph TEXT, od_cyl TEXT, od_axis TEXT,
-  oi_sph TEXT, oi_cyl TEXT, oi_axis TEXT,
-  add TEXT, recommendation TEXT, raw_text TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- RLS permissive
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "all_products" ON products FOR ALL USING (true) WITH CHECK (true);
-ALTER TABLE providers ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "all_providers" ON providers FOR ALL USING (true) WITH CHECK (true);
-ALTER TABLE lens_prices ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "all_lens" ON lens_prices FOR ALL USING (true) WITH CHECK (true);
-ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "all_settings" ON settings FOR ALL USING (true) WITH CHECK (true);
-ALTER TABLE prescriptions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "all_prescriptions" ON prescriptions FOR ALL USING (true) WITH CHECK (true);
-
--- Default settings
-INSERT INTO settings (key, value) VALUES
-('profit_basico', '30'),
-('profit_estandar', '50'),
-('profit_premium', '70')
-ON CONFLICT (key) DO NOTHING;`}
-                    </pre>
-                  </div>
                 </div>
               )}
             </motion.div>
@@ -1216,9 +1151,7 @@ ON CONFLICT (key) DO NOTHING;`}
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); if (tab.id === 'catalog') { setShowUploadForm(false); setEditingProduct(null); } }}
-              className={`flex flex-col items-center py-2 px-3 rounded-xl transition-all ${
-                activeTab === tab.id ? 'text-[#D4AF37]' : 'text-[#555] hover:text-[#888]'
-              }`}
+              className={`flex flex-col items-center py-2 px-3 rounded-xl transition-all ${activeTab === tab.id ? 'text-[#D4AF37]' : 'text-[#555] hover:text-[#888]'}`}
             >
               <AnimatePresence mode="wait">
                 {activeTab === tab.id ? (
@@ -1237,7 +1170,6 @@ ON CONFLICT (key) DO NOTHING;`}
             </button>
           ))}
         </div>
-        {/* Safe area padding for iOS */}
         <div className="h-[env(safe-area-inset-bottom)]" />
       </nav>
     </div>
