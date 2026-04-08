@@ -265,8 +265,25 @@ export default function Page() {
         body: formData,
       });
       const data = await res.json();
-      if (res.ok) return data.url;
-      throw new Error(data.error || 'Error al subir imagen');
+      if (res.ok && data.url) {
+        showToast('Imagen subida a Cloudinary ✅');
+        return data.url;
+      }
+      // Si Cloudinary falla, usar base64 como fallback
+      console.warn('Cloudinary falló, usando base64:', data.error);
+      showToast('Cloudinary no disponible, se guardará localmente', 'error');
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+    } catch (err) {
+      showToast('Error al subir imagen', 'error');
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
     } finally {
       setUploadingImage(false);
     }
