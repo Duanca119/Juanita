@@ -3,16 +3,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Home, Eye, DollarSign, Package, Settings, Upload, Camera,
+  Home, Eye, DollarSign, Package, Upload, Camera,
   Plus, Edit3, Trash2, Check, X, Send,
   ChevronRight, AlertCircle, Loader2, Share2,
   FileText, RefreshCw, Eye as EyeIcon, Sparkles, TrendingUp,
-  Building2, Glasses, Percent, Database, Save
+  Building2, Glasses, Database, Save,
+  Settings, LogOut, Download, UserPlus, Users
 } from 'lucide-react';
 
 // ==================== TYPES ====================
-type TabId = 'home' | 'formula' | 'pricing' | 'catalog' | 'admin';
-type AdminSubTab = 'providers' | 'lens-prices' | 'profits' | 'database';
+type TabId = 'home' | 'formula' | 'pricing' | 'catalog' | 'soporte';
+type SoporteSubTab = 'backup' | 'users' | 'database';
+
+interface CurrentUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'employee';
+  created_at: string;
+}
 
 interface Product {
   id: string;
@@ -79,8 +88,15 @@ const statusBadge = (status: string) => {
 export default function Page() {
   // Navigation
   const [activeTab, setActiveTab] = useState<TabId>('home');
-  const [adminSubTab, setAdminSubTab] = useState<AdminSubTab>('providers');
+  const [soporteSubTab, setSoporteSubTab] = useState<SoporteSubTab>('backup');
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Auth
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   // Data
   const [products, setProducts] = useState<Product[]>([]);
@@ -149,6 +165,12 @@ export default function Page() {
   });
   const [editingLens, setEditingLens] = useState<LensPrice | null>(null);
 
+  // Soporte - Users
+  const [usersList, setUsersList] = useState<CurrentUser[]>([]);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'employee' as 'admin' | 'employee' });
+  const [editingUser, setEditingUser] = useState<CurrentUser | null>(null);
+
   // Toast helper
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -210,6 +232,60 @@ export default function Page() {
     }
     setLoading(false);
   }, [fetchSettings, showToast]);
+
+  // ==================== AUTH ====================
+  const handleLogin = async () => {
+    if (!loginEmail || !loginPassword) {
+      showToast('Email y contraseña son requeridos', 'error');
+      return;
+    }
+    setLoginLoading(true);
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCurrentUser(data.user);
+        localStorage.setItem('jp_user', JSON.stringify(data.user));
+        setShowLogin(false);
+        setLoginEmail('');
+        setLoginPassword('');
+        showToast(`Bienvenido, ${data.user.name}`);
+        // Set default tab based on role
+        setActiveTab(data.user.role === 'admin' ? 'home' : 'catalog');
+      } else {
+        showToast(data.error || 'Error al iniciar sesión', 'error');
+      }
+    } catch {
+      showToast('Error de conexión', 'error');
+    }
+    setLoginLoading(false);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('jp_user');
+    setShowLogin(true);
+    showToast('Sesión cerrada');
+  };
+
+  // Check localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('jp_user');
+    if (saved) {
+      try {
+        const user = JSON.parse(saved);
+        setCurrentUser(user);
+      } catch {
+        localStorage.removeItem('jp_user');
+      }
+    } else {
+      setShowLogin(true);
+    }
+  }, []);
 
   // Load all data
   useEffect(() => {
@@ -697,14 +773,103 @@ export default function Page() {
     } catch (err) { console.error(err); showToast('Error al generar PDF', 'error'); }
   };
 
+  // ==================== USER MANAGEMENT ====================
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) setUsersList(await res.json());
+    } catch { /* ignore */ }
+  }, []);
+
+  const saveUser = async () => {
+    if (!userForm.name || !userForm.email || !userForm.password) {
+      showToast('Todos los campos son requeridos', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      let res: Response;
+      if (editingUser) {
+        res = await fetch('/api/users', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingUser.id, name: userForm.name, role: userForm.role }),
+        });
+      } else {
+        res = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userForm),
+        });
+      }
+      if (res.ok) {
+        showToast(editingUser ? 'Usuario actualizado' : 'Usuario creado');
+        setShowUserForm(false);
+        setEditingUser(null);
+        setUserForm({ name: '', email: '', password: '', role: 'employee' });
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Error al guardar', 'error');
+      }
+    } catch {
+      showToast('Error de conexión', 'error');
+    }
+    setLoading(false);
+  };
+
+  const deleteUser = async (id: string) => {
+    if (!confirm('¿Eliminar este usuario?')) return;
+    try {
+      const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+      if (res.ok) { showToast('Usuario eliminado'); fetchUsers(); }
+    } catch { /* ignore */ }
+  };
+
+  // ==================== BACKUP EXPORT ====================
+  const exportBackup = async () => {
+    try {
+      showToast('Generando respaldo...');
+      const [productsRes, providersRes, pricingRes, settingsRes] = await Promise.all([
+        fetch('/api/products'),
+        fetch('/api/providers'),
+        fetch('/api/pricing'),
+        fetch('/api/settings'),
+      ]);
+      const backup = {
+        exportDate: new Date().toISOString(),
+        products: productsRes.ok ? await productsRes.json() : [],
+        providers: providersRes.ok ? await providersRes.json() : [],
+        lens_prices: pricingRes.ok ? await pricingRes.json() : [],
+        settings: settingsRes.ok ? await settingsRes.json() : [],
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `juanita-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Respaldo descargado correctamente');
+    } catch {
+      showToast('Error al generar respaldo', 'error');
+    }
+  };
+
   // ==================== NAV TABS ====================
-  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  const allTabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'home', label: 'Inicio', icon: <Home size={20} /> },
     { id: 'formula', label: 'Fórmula', icon: <Eye size={20} /> },
     { id: 'pricing', label: 'Cotizar', icon: <DollarSign size={20} /> },
     { id: 'catalog', label: 'Catálogo', icon: <Package size={20} /> },
-    { id: 'admin', label: 'Admin', icon: <Settings size={20} /> },
+    { id: 'soporte', label: 'Soporte', icon: <Settings size={20} /> },
   ];
+
+  const tabs = currentUser
+    ? (currentUser.role === 'admin'
+      ? allTabs
+      : allTabs.filter((t) => ['home', 'formula', 'catalog'].includes(t.id)))
+    : allTabs.filter((t) => ['home', 'formula', 'catalog'].includes(t.id));
 
   // ==================== RENDER ====================
   return (
@@ -722,6 +887,38 @@ export default function Page() {
         )}
       </AnimatePresence>
 
+      {/* Login Modal */}
+      <AnimatePresence>
+        {showLogin && !currentUser && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.95)' }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-sm space-y-6">
+              <div className="text-center">
+                <img src="/logo.png" alt="Logo" className="w-16 h-16 rounded-full object-cover border-2 border-[#D4AF37] mx-auto mb-4" />
+                <h2 className="text-xl font-bold text-gold-gradient">Juanita Pelaez</h2>
+                <p className="text-xs text-[#888] mt-1">Inicia sesión para continuar</p>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-[#666] uppercase mb-1 block">Email</label>
+                  <input type="email" className="premium-input text-sm" placeholder="correo@ejemplo.com" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+                </div>
+                <div>
+                  <label className="text-xs text-[#666] uppercase mb-1 block">Contraseña</label>
+                  <input type="password" className="premium-input text-sm" placeholder="Tu contraseña" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+                </div>
+                {loginLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-3"><Loader2 size={18} className="animate-spin text-[#D4AF37]" /><span className="text-sm text-[#888]">Ingresando...</span></div>
+                ) : (
+                  <button onClick={handleLogin} className="w-full btn-gold flex items-center justify-center gap-2">
+                    Iniciar Sesión
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="sticky top-0 z-40 px-4 py-3 flex items-center justify-between" style={{ background: 'rgba(0,0,0,0.9)', borderBottom: '1px solid #1a1a1a', backdropFilter: 'blur(10px)' }}>
         <div className="flex items-center gap-3">
@@ -731,9 +928,22 @@ export default function Page() {
             <p className="text-[10px] text-[#A0A0A0] tracking-widest uppercase">Visión Profesional</p>
           </div>
         </div>
-        <button onClick={shareCatalogWhatsApp} className="p-2 rounded-full hover:bg-[#1a1a1a] transition-colors" title="Compartir catálogo por WhatsApp">
-          <Share2 size={18} className="text-[#D4AF37]" />
-        </button>
+        <div className="flex items-center gap-2">
+          {currentUser && (
+            <div className="flex items-center gap-2 mr-1">
+              <div className="text-right">
+                <p className="text-xs text-white font-medium leading-tight">{currentUser.name}</p>
+                <p className="text-[10px] text-[#D4AF37] uppercase">{currentUser.role}</p>
+              </div>
+              <button onClick={handleLogout} className="p-2 rounded-full hover:bg-[#1a1a1a] transition-colors" title="Cerrar sesión">
+                <LogOut size={16} className="text-[#888] hover:text-red-400" />
+              </button>
+            </div>
+          )}
+          <button onClick={shareCatalogWhatsApp} className="p-2 rounded-full hover:bg-[#1a1a1a] transition-colors" title="Compartir catálogo por WhatsApp">
+            <Share2 size={18} className="text-[#D4AF37]" />
+          </button>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -1216,184 +1426,107 @@ export default function Page() {
             </motion.div>
           )}
 
-          {/* ==================== ADMIN ==================== */}
-          {activeTab === 'admin' && (
-            <motion.div key="admin" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2"><Settings size={20} className="text-[#D4AF37]" /> Panel de Administración</h2>
+          {/* ==================== SOPORTE ==================== */}
+          {activeTab === 'soporte' && (
+            <motion.div key="soporte" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2"><Settings size={20} className="text-[#D4AF37]" /> Soporte Técnico</h2>
 
-              {/* Admin Sub-tabs */}
+              {/* Soporte Sub-tabs */}
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {([
-                  { id: 'providers' as const, label: 'Proveedores', icon: <Building2 size={14} /> },
-                  { id: 'lens-prices' as const, label: 'Precios', icon: <DollarSign size={14} /> },
-                  { id: 'profits' as const, label: 'Márgenes', icon: <Percent size={14} /> },
+                  { id: 'backup' as const, label: 'Respaldo', icon: <Download size={14} /> },
+                  ...(currentUser?.role === 'admin' ? [{ id: 'users' as const, label: 'Usuarios', icon: <Users size={14} /> }] : []),
                   { id: 'database' as const, label: 'Base Datos', icon: <Database size={14} /> },
                 ]).map((tab) => (
-                  <button key={tab.id} onClick={() => setAdminSubTab(tab.id)} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${adminSubTab === tab.id ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30' : 'bg-[#111] text-[#888] border border-[#1a1a1a]'}`}>
+                  <button key={tab.id} onClick={() => { setSoporteSubTab(tab.id); if (tab.id === 'users') fetchUsers(); }} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${soporteSubTab === tab.id ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30' : 'bg-[#111] text-[#888] border border-[#1a1a1a]'}`}>
                     {tab.icon} {tab.label}
                   </button>
                 ))}
               </div>
 
-              {/* === Providers Tab === */}
-              {adminSubTab === 'providers' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-[#A0A0A0]">{providers.length} proveedores</p>
-                    <button onClick={() => { setEditingProvider(null); setProviderForm({ name: '', contact: '', phone: '' }); setShowProviderForm(true); }} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1"><Plus size={14} /> Nuevo</button>
-                  </div>
-
-                  {showProviderForm && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #222' }}>
-                      <input className="premium-input text-sm" placeholder="Nombre del proveedor *" value={providerForm.name} onChange={(e) => setProviderForm((f) => ({ ...f, name: e.target.value }))} />
-                      <div className="flex gap-2">
-                        <button onClick={saveProvider} disabled={loading} className="flex-1 btn-gold text-sm flex items-center justify-center gap-1">{loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar</button>
-                        <button onClick={() => setShowProviderForm(false)} className="px-4 py-2 rounded-xl text-sm bg-[#1a1a1a] text-[#888]">Cancelar</button>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {providers.map((provider) => (
-                    <div key={provider.id} className="rounded-xl p-3 flex items-center justify-between card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                      <div>
-                        <p className="text-sm font-medium text-white">{provider.name}</p>
-                        <p className="text-xs text-[#666]">{lensPrices.filter(l => l.provider_id === provider.id).length} precios registrados</p>
-                      </div>
-                      <div className="flex gap-1">
-                        <button onClick={() => { setEditingProvider(provider); setProviderForm({ name: provider.name, contact: '', phone: '' }); setShowProviderForm(true); }} className="p-1.5 rounded-lg text-[#666] hover:text-[#D4AF37] transition-colors"><Edit3 size={14} /></button>
-                        <button onClick={() => deleteProvider(provider.id)} className="p-1.5 rounded-lg text-[#666] hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* === Lens Prices Tab (adaptado al esquema real) === */}
-              {adminSubTab === 'lens-prices' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-[#A0A0A0]">{lensPrices.length} precios</p>
-                    <button onClick={() => { setEditingLens(null); setLensForm({ provider_id: '', lens_type: '', quality: 'basico', base_price: 0, blue_filter: 0, photochromic: 0, antireflective: 0 }); setShowLensForm(true); }} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1"><Plus size={14} /> Nuevo</button>
-                  </div>
-
-                  {showLensForm && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #222' }}>
-                      <select className="premium-input text-sm" value={lensForm.provider_id} onChange={(e) => setLensForm((f) => ({ ...f, provider_id: e.target.value }))}>
-                        <option value="">Proveedor...</option>
-                        {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                      <div className="grid grid-cols-2 gap-3">
-                        <select className="premium-input text-sm" value={lensForm.lens_type} onChange={(e) => setLensForm((f) => ({ ...f, lens_type: e.target.value }))}>
-                          <option value="">Tipo lente...</option>
-                          <option value="monofocal">Monofocal</option>
-                          <option value="progresivo">Progresivo</option>
-                          <option value="bifocal">Bifocal</option>
-                          <option value="ocupacional">Ocupacional</option>
-                        </select>
-                        <select className="premium-input text-sm" value={lensForm.quality} onChange={(e) => setLensForm((f) => ({ ...f, quality: e.target.value }))}>
-                          <option value="basico">Básico</option>
-                          <option value="premium">Premium</option>
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] text-[#666] uppercase">Precio base</label>
-                          <input type="number" className="premium-input text-sm" value={lensForm.base_price || ''} onChange={(e) => setLensForm((f) => ({ ...f, base_price: parseFloat(e.target.value) || 0 }))} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-[#666] uppercase">Filtro azul</label>
-                          <input type="number" className="premium-input text-sm" value={lensForm.blue_filter || ''} onChange={(e) => setLensForm((f) => ({ ...f, blue_filter: parseFloat(e.target.value) || 0 }))} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-[#666] uppercase">Fotocromático</label>
-                          <input type="number" className="premium-input text-sm" value={lensForm.photochromic || ''} onChange={(e) => setLensForm((f) => ({ ...f, photochromic: parseFloat(e.target.value) || 0 }))} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-[#666] uppercase">Antirreflejo</label>
-                          <input type="number" className="premium-input text-sm" value={lensForm.antireflective || ''} onChange={(e) => setLensForm((f) => ({ ...f, antireflective: parseFloat(e.target.value) || 0 }))} />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={saveLensPrice} disabled={loading} className="flex-1 btn-gold text-sm flex items-center justify-center gap-1">{loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Guardar</button>
-                        <button onClick={() => setShowLensForm(false)} className="px-4 py-2 rounded-xl text-sm bg-[#1a1a1a] text-[#888]">Cancelar</button>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Agrupar por proveedor */}
-                  {providers.map((prov) => {
-                    const provLens = lensPrices.filter((l) => l.provider_id === prov.id);
-                    if (provLens.length === 0) return null;
-                    return (
-                      <div key={prov.id} className="space-y-2">
-                        <p className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider">{prov.name}</p>
-                        {provLens.map((lens) => (
-                          <div key={lens.id} className="rounded-xl p-3 card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium text-white capitalize">{lens.lens_type} ({lens.quality})</span>
-                              <div className="flex gap-1">
-                                <button onClick={() => { setEditingLens(lens); setLensForm({ provider_id: lens.provider_id, lens_type: lens.lens_type, quality: lens.quality, base_price: lens.base_price, blue_filter: lens.blue_filter, photochromic: lens.photochromic, antireflective: lens.antireflective }); setShowLensForm(true); }} className="p-1 rounded text-[#666] hover:text-[#D4AF37]"><Edit3 size={12} /></button>
-                                <button onClick={() => deleteLensPrice(lens.id)} className="p-1 rounded text-[#666] hover:text-red-400"><Trash2 size={12} /></button>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-4 gap-1 text-[10px]">
-                              <div className="text-center p-1 rounded bg-[#0a0a0a]">
-                                <p className="text-[#888]">Base</p>
-                                <p className="text-white font-bold">{formatCurrency(lens.base_price)}</p>
-                              </div>
-                              <div className="text-center p-1 rounded bg-[#0a0a0a]">
-                                <p className="text-[#888]">Blue</p>
-                                <p className="text-blue-400 font-bold">{formatCurrency(lens.blue_filter)}</p>
-                              </div>
-                              <div className="text-center p-1 rounded bg-[#0a0a0a]">
-                                <p className="text-[#888]">Foto</p>
-                                <p className="text-purple-400 font-bold">{formatCurrency(lens.photochromic)}</p>
-                              </div>
-                              <div className="text-center p-1 rounded bg-[#0a0a0a]">
-                                <p className="text-[#888]">AR</p>
-                                <p className="text-green-400 font-bold">{formatCurrency(lens.antireflective)}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* === Profits Tab (adaptado al esquema real) === */}
-              {adminSubTab === 'profits' && (
+              {/* === Backup Tab === */}
+              {soporteSubTab === 'backup' && (
                 <div className="space-y-4">
-                  <p className="text-sm text-[#A0A0A0]">Configura los porcentajes de ganancia para cada perfil</p>
-                  {settingsList.map((setting) => (
-                    <div key={setting.id} className="rounded-xl p-4" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                      <label className="text-sm font-medium text-white block mb-2">{setting.name}</label>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="number"
-                          className="premium-input text-lg font-bold text-[#D4AF37] text-center flex-1"
-                          value={Math.round(setting.profit_margin * 100)}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) / 100;
-                            setSettingsList((prev) => prev.map((s) => s.id === setting.id ? { ...s, profit_margin: val } : s));
-                          }}
-                          min="0"
-                          max="100"
-                        />
-                        <span className="text-2xl text-[#444]">%</span>
+                  <div className="rounded-xl p-5 space-y-4" style={{ background: 'linear-gradient(135deg, #1a1505 0%, #111 100%)', border: '1px solid rgba(212,175,55,0.2)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+                        <Download size={24} className="text-[#D4AF37]" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[#D4AF37]">Respaldo de Datos</h3>
+                        <p className="text-xs text-[#888]">Exporta toda la información como archivo JSON</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-[#666]">Se descargarán: productos, proveedores, precios de lentes y configuración de márgenes.</p>
+                    <button onClick={exportBackup} disabled={loading} className="w-full btn-gold flex items-center justify-center gap-2">
+                      <Download size={16} />
+                      Descargar Respaldo JSON
+                    </button>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: 'Productos', value: products.length },
+                      { label: 'Proveedores', value: providers.length },
+                      { label: 'Precios Lentes', value: lensPrices.length },
+                      { label: 'Márgenes', value: settingsList.length },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl p-3 text-center" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                        <p className="text-xl font-bold text-white">{item.value}</p>
+                        <p className="text-xs text-[#666]">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* === Users Tab (Admin only) === */}
+              {soporteSubTab === 'users' && currentUser?.role === 'admin' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-[#A0A0A0]">{usersList.length} usuarios</p>
+                    <button onClick={() => { setEditingUser(null); setUserForm({ name: '', email: '', password: '', role: 'employee' }); setShowUserForm(true); }} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1"><UserPlus size={14} /> Nuevo</button>
+                  </div>
+
+                  {showUserForm && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #222' }}>
+                      <input className="premium-input text-sm" placeholder="Nombre completo *" value={userForm.name} onChange={(e) => setUserForm((f) => ({ ...f, name: e.target.value }))} />
+                      <input type="email" className="premium-input text-sm" placeholder="Email *" value={userForm.email} onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))} />
+                      {!editingUser && (
+                        <input type="password" className="premium-input text-sm" placeholder="Contraseña *" value={userForm.password} onChange={(e) => setUserForm((f) => ({ ...f, password: e.target.value }))} />
+                      )}
+                      <select className="premium-input text-sm" value={userForm.role} onChange={(e) => setUserForm((f) => ({ ...f, role: e.target.value as 'admin' | 'employee' }))}>
+                        <option value="employee">Empleado</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                      <div className="flex gap-2">
+                        <button onClick={saveUser} disabled={loading} className="flex-1 btn-gold text-sm flex items-center justify-center gap-1">{loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {editingUser ? 'Actualizar' : 'Crear'}</button>
+                        <button onClick={() => { setShowUserForm(false); setEditingUser(null); }} className="px-4 py-2 rounded-xl text-sm bg-[#1a1a1a] text-[#888]">Cancelar</button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {usersList.map((user) => (
+                    <div key={user.id} className="rounded-xl p-3 flex items-center justify-between card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                      <div>
+                        <p className="text-sm font-medium text-white">{user.name}</p>
+                        <p className="text-xs text-[#666]">{user.email}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${user.role === 'admin' ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-[#333] text-[#888]'}`}>{user.role === 'admin' ? 'Admin' : 'Empleado'}</span>
+                        <div className="flex gap-1">
+                          <button onClick={() => { setEditingUser(user); setUserForm({ name: user.name, email: user.email, password: '', role: user.role }); setShowUserForm(true); }} className="p-1.5 rounded-lg text-[#666] hover:text-[#D4AF37] transition-colors"><Edit3 size={14} /></button>
+                          <button onClick={() => deleteUser(user.id)} className="p-1.5 rounded-lg text-[#666] hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                        </div>
                       </div>
                     </div>
                   ))}
-                  <button onClick={saveProfitMargins} disabled={loading} className="w-full btn-gold flex items-center justify-center gap-2">
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Guardar Márgenes
-                  </button>
                 </div>
               )}
 
               {/* === Database Tab === */}
-              {adminSubTab === 'database' && (
+              {soporteSubTab === 'database' && (
                 <div className="space-y-4">
                   <div className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
                     <h3 className="text-sm font-semibold text-[#D4AF37]">Estado de la Base de Datos</h3>
@@ -1414,9 +1547,9 @@ export default function Page() {
                   </div>
 
                   {/* SQL para crear tabla products */}
-                  <div className="rounded-xl p-4" style={{ background: '#111', border: '1px solid #D4AF37/30' }}>
-                    <h3 className="text-sm font-bold text-[#D4AF37] mb-2">⚠️ Tabla faltante: products</h3>
-                    <p className="text-xs text-[#A0A0A0] mb-3">Ejecuta este SQL en el <strong>SQL Editor</strong> de Supabase para crear la tabla:</p>
+                  <div className="rounded-xl p-4" style={{ background: '#111', border: '1px solid rgba(212,175,55,0.3)' }}>
+                    <h3 className="text-sm font-bold text-[#D4AF37] mb-2">Tabla products</h3>
+                    <p className="text-xs text-[#A0A0A0] mb-3">Ejecuta este SQL en el <strong>SQL Editor</strong> de Supabase:</p>
                     <pre className="text-[10px] leading-relaxed text-[#ccc] bg-[#0a0a0a] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">{`CREATE TABLE IF NOT EXISTS products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   image_url TEXT,
