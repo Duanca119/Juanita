@@ -867,6 +867,9 @@ export default function Page() {
                         <select className="premium-input text-sm" value={uploadForm.description} onChange={(e) => setUploadForm((f) => ({ ...f, description: e.target.value }))}>
                           <option value="">Seleccionar...</option>
                           <option value="Acetato">Acetato</option>
+                          <option value="Metal">Metal</option>
+                          <option value="TR90">TR90</option>
+                          <option value="Titanio">Titanio</option>
                           <option value="Acerada">Acerada</option>
                           <option value="Mixta">Mixta</option>
                           <option value="Tres Piezas">Tres Piezas</option>
@@ -877,7 +880,7 @@ export default function Page() {
                       <div>
                         <label className="text-xs font-bold text-white block mb-1.5">Género *</label>
                         <div className="flex flex-wrap gap-2">
-                          {[{v: 'mujer', l: 'Mujer'}, {v: 'hombre', l: 'Hombre'}, {v: 'nino', l: 'Niño'}, {v: 'unisex', l: 'Unisex'}, {v: 'gafas_de_sol', l: 'Gafas de Sol'}].map((g) => (
+                          {[{v: 'mujer', l: 'Mujer'}, {v: 'hombre', l: 'Hombre'}, {v: 'unisex', l: 'Unisex'}, {v: 'nino', l: 'Niño'}].map((g) => (
                             <button key={g.v} type="button" onClick={() => setUploadForm((f) => ({ ...f, gender: g.v }))} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${uploadForm.gender === g.v ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#0a0a0a] text-[#ccc] border border-[#333] hover:border-[#555]'}`}>{g.l}</button>
                           ))}
                         </div>
@@ -887,7 +890,7 @@ export default function Page() {
                       <div>
                         <label className="text-xs font-bold text-white block mb-1.5">Estilo *</label>
                         <div className="flex flex-wrap gap-2">
-                          {[{v: 'ovalada', l: 'Ovalada'}, {v: 'cat_eye', l: 'Cat-Eye'}, {v: 'redonda', l: 'Redonda'}, {v: 'cuadrada', l: 'Cuadrada'}, {v: 'aviador', l: 'Aviador'}, {v: 'rectangular', l: 'Rectangular'}, {v: 'wayfarer', l: 'Wayfarer'}, {v: 'clubmaster', l: 'Clubmaster'}, {v: 'media_luna', l: 'Media Luna'}, {v: 'otro', l: 'Otro'}].map((s) => (
+                          {[{v: 'classic', l: 'Classic'}, {v: 'sport', l: 'Sport'}, {v: 'vintage', l: 'Vintage'}, {v: 'modern', l: 'Modern'}, {v: 'cat_eye', l: 'Cat Eye'}, {v: 'aviator', l: 'Aviator'}, {v: 'bold', l: 'Bold'}, {v: 'ovalada', l: 'Ovalada'}, {v: 'cuadrada', l: 'Cuadrada'}, {v: 'redonda', l: 'Redonda'}, {v: 'rectangular', l: 'Rectangular'}, {v: 'wayfarer', l: 'Wayfarer'}, {v: 'clubmaster', l: 'Clubmaster'}, {v: 'media_luna', l: 'Media Luna'}, {v: 'otro', l: 'Otro'}].map((s) => (
                             <button key={s.v} type="button" onClick={() => setUploadForm((f) => ({ ...f, style: s.v }))} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${uploadForm.style === s.v ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#0a0a0a] text-[#ccc] border border-[#333] hover:border-[#555]'}`}>{s.l}</button>
                           ))}
                         </div>
