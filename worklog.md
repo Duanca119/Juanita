@@ -1,26 +1,28 @@
 ---
-Task ID: 1
+Task ID: 2
 Agent: Main Agent
-Task: Construir aplicación completa Juanita Pelaez Visión
+Task: Adaptar app al esquema real de Supabase y actualizar GitHub
 
 Work Log:
-- Inicializado entorno fullstack Next.js 16
-- Instaladas dependencias: @supabase/supabase-js, cloudinary, jspdf, html2canvas
-- Copiado logo del usuario a /public/logo.png
-- Creado .env.local con credenciales Supabase
-- Creado src/lib/supabase.ts (cliente Supabase)
-- Creados 7 API routes: init-db, prescription/analyze, upload, products, providers, pricing, settings
-- Creado public/manifest.json (PWA manifest)
-- Creado public/sw.js (service worker para offline)
-- Actualizado layout.tsx con metadata PWA, meta tags, y service worker registration
-- Actualizado globals.css con tema premium negro + dorado completo
-- Construido page.tsx completo con 5 tabs: Inicio, Fórmula, Cotizar, Catálogo, Admin
+- Verificado esquema existente en Supabase:
+  - ✅ providers (3 registros): id, name, created_at
+  - ✅ lens_prices (12 registros): id, provider_id, lens_type, quality, base_price, blue_filter, photochromic, antireflective
+  - ✅ settings (3 registros): id, name, profit_margin (Básico=0.3, Estándar=0.5, Premium=0.7)
+  - ✅ prescriptions: id, od_sph, od_cyl, od_axis, oi_sph, oi_cyl, oi_axis, add_value
+  - ❌ products: NO EXISTE en schema cache
+- Adaptada toda la app al esquema real:
+  - Settings usa formato name/profit_margin en vez de key/value
+  - Lens prices usa columnas individuales (blue_filter, photochromic, antireflective, quality)
+  - Cotizador muestra extras con checkboxes y precios individuales
+  - Admin agrupa precios por proveedor con grid visual
+- Actualizado API routes: settings/route.ts, init-db/route.ts
+- Reescrito page.tsx completo adaptado al esquema
+- SQL para crear tabla products incluido en panel Admin → Base Datos
+- GitHub actualizado: Duanca119/Juanita (push force exitoso)
 - Lint pasado sin errores
+- Dev server compilando correctamente
 
 Stage Summary:
-- App completa PWA "Juanita Pelaez Visión" construida y funcionando
-- Tema premium negro (#000) + dorado (#D4AF37)
-- Todas las APIs creadas y funcionando
-- 5 secciones principales: Inicio, Analizador de Fórmulas (Gemini AI), Cotizador de Lentes, Catálogo de Productos, Panel Admin
-- PWA configurado con manifest.json y service worker
-- Dev server compilando correctamente (GET / 200)
+- GitHub repo actualizado: https://github.com/Duanca119/Juanita
+- Solo falta crear tabla "products" en Supabase SQL Editor
+- App lista para deploy en Vercel
