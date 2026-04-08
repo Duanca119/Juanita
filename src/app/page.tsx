@@ -493,69 +493,183 @@ export default function Page() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const shareCatalog = () => {
-    const url = window.location.href;
-    window.open(`https://wa.me/?text=${encodeURIComponent(`👓 Juanita Pelaez Visión\nMira nuestro catálogo: ${url}`)}`, '_blank');
+  const shareCatalogWhatsApp = () => {
+    const baseUrl = window.location.origin;
+    const catalogUrl = `${baseUrl}/catalogo/${genderFilter}`;
+    const genderName = genderFilter === 'todos' ? 'Catálogo Completo' : genderFilter === 'gafas_de_sol' ? 'Gafas de Sol' : genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1);
+    const text = `👓 *Juanita Pelaez Visión*\n\n${genderName} - ${products.filter((p) => genderFilter === 'todos' || p.gender === genderFilter).length} monturas disponibles\n\n👉 Mira el catálogo aquí:\n${catalogUrl}\n\n¡Visítanos! 😊`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   // ==================== PDF EXPORT ====================
   const exportPDF = async () => {
     try {
       const { default: jsPDF } = await import('jspdf');
-      showToast('Generando PDF...');
+      showToast('Generando PDF con imágenes...');
+
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
 
-      pdf.setFillColor(0, 0, 0);
-      pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-      pdf.setTextColor(212, 175, 55);
-      pdf.setFontSize(18);
-      pdf.text('Juanita Pelaez Visión', pageWidth / 2, 15, { align: 'center' });
-      pdf.setFontSize(10);
-      pdf.text('Catálogo de Monturas', pageWidth / 2, 22, { align: 'center' });
-      pdf.setDrawColor(212, 175, 55);
-      pdf.setLineWidth(0.5);
-      pdf.line(20, 25, pageWidth - 20, 25);
+      // Helper: nueva página con fondo negro
+      const newPage = () => { pdf.addPage(); pdf.setFillColor(0, 0, 0); pdf.rect(0, 0, pw, ph, 'F'); };
+      // Helper: dibujar header en página
+      const drawHeader = (subtitle: string) => {
+        pdf.setTextColor(212, 175, 55);
+        pdf.setFontSize(16);
+        pdf.text('Juanita Pelaez Visión', pw / 2, 12, { align: 'center' });
+        pdf.setFontSize(9);
+        pdf.setTextColor(160, 160, 160);
+        pdf.text(subtitle, pw / 2, 18, { align: 'center' });
+        pdf.setDrawColor(212, 175, 55);
+        pdf.setLineWidth(0.3);
+        pdf.line(15, 21, pw - 15, 21);
+      };
+      // Helper: dibujar marca de agua
+      const drawWatermark = (x: number, y: number, w: number, h: number, status: string) => {
+        const colors: Record<string, [number, number, number]> = {
+          agotado: [220, 50, 50],
+          vendido: [230, 130, 50],
+          reservado: [200, 180, 50],
+        };
+        const labels: Record<string, string> = { agotado: 'AGOTADO', vendido: 'VENDIDO', reservado: 'RESERVADO' };
+        const col = colors[status];
+        if (!col) return;
+        // overlay oscuro
+        pdf.setFillColor(0, 0, 0);
+        pdf.setGState(new (pdf as any).GState({ opacity: 0.5 }));
+        pdf.rect(x, y, w, h, 'F');
+        pdf.setGState(new (pdf as any).GState({ opacity: 0.9 }));
+        // texto diagonal
+        pdf.setTextColor(col[0], col[1], col[2]);
+        pdf.setFontSize(18);
+        const cx = x + w / 2, cy = y + h / 2;
+        pdf.text(labels[status], cx, cy, { align: 'center', angle: -20 });
+        pdf.setGState(new (pdf as any).GState({ opacity: 1 }));
+      };
+      // Helper: cargar imagen
+      const loadImage = (url: string): Promise<string> =>
+        new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(url);
+          img.onerror = () => resolve('');
+          img.src = url;
+        });
 
+      // Filtrar productos
       const filtered = products.filter((p) => {
         if (genderFilter !== 'todos' && p.gender !== genderFilter) return false;
         if (statusFilter !== 'todos' && p.status !== statusFilter) return false;
         return true;
       });
 
-      let y = 32;
+      const genderLabels: Record<string, string> = {
+        mujer: '👩 Catálogo Mujer', hombre: '👨 Catálogo Hombre', nino: '👶 Catálogo Niños',
+        unisex: '🧑 Catálogo Unisex', gafas_de_sol: '🕶️ Catálogo Gafas de Sol', todos: '📋 Catálogo Completo',
+      };
+      const styleLabelsPDF: Record<string, string> = {
+        cuadrada: 'Cuadradas', cat_eye: 'Cat Eye', ovalada: 'Ovaladas', redonda: 'Redondas',
+        rectangular: 'Rectangulares', aviator: 'Aviador', wayfarer: 'Wayfarer', clubmaster: 'Clubmaster',
+        classic: 'Classic', sport: 'Sport', vintage: 'Vintage', modern: 'Modern', bold: 'Bold',
+        media_luna: 'Media Luna', otro: 'Otros',
+      };
+      const styleOrder = ['cuadrada', 'cat_eye', 'ovalada', 'redonda', 'rectangular', 'aviator', 'wayfarer', 'clubmaster', 'classic', 'sport', 'vintage', 'modern', 'bold', 'media_luna', 'otro'];
+
+      // Agrupar por estilo
+      const grouped: Record<string, typeof filtered> = {};
+      styleOrder.forEach((s) => { const items = filtered.filter((p) => p.style === s); if (items.length) grouped[s] = items; });
+      const others = filtered.filter((p) => !styleOrder.includes(p.style));
+      if (others.length) grouped['otro'] = others;
+
+      if (Object.keys(grouped).length === 0) {
+        pdf.setFillColor(0, 0, 0); pdf.rect(0, 0, pw, ph, 'F');
+        drawHeader('Sin productos');
+        pdf.setTextColor(160, 160, 160); pdf.setFontSize(12);
+        pdf.text('No hay productos para exportar', pw / 2, ph / 2, { align: 'center' });
+        pdf.save('juanita-pelaez-catalogo.pdf');
+        return;
+      }
+
+      // Primera página
+      pdf.setFillColor(0, 0, 0); pdf.rect(0, 0, pw, ph, 'F');
+      drawHeader(genderLabels[genderFilter] || 'Catálogo Completo');
+      pdf.setFontSize(8); pdf.setTextColor(100, 100, 100);
+      pdf.text(`Generado: ${new Date().toLocaleDateString('es-CO')}`, pw / 2, 24, { align: 'center' });
+
+      let y = 28;
       let count = 0;
-      for (const product of filtered) {
-        if (count > 0 && count % 4 === 0) { pdf.addPage(); pdf.setFillColor(0, 0, 0); pdf.rect(0, 0, pageWidth, pageHeight, 'F'); y = 15; }
-        const boxX = count % 2 === 0 ? 15 : pageWidth / 2 + 5;
-        const boxW = pageWidth / 2 - 20;
-        const boxH = 55;
-        pdf.setFillColor(17, 17, 17);
-        pdf.roundedRect(boxX, y, boxW, boxH, 3, 3, 'F');
-        pdf.setDrawColor(212, 175, 55);
-        pdf.setLineWidth(0.3);
-        pdf.roundedRect(boxX, y, boxW, boxH, 3, 3, 'S');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(8);
-        pdf.text(pdf.splitTextToSize(product.description || 'Sin descripción', boxW - 10).slice(0, 3), boxX + 5, y + 10);
-        pdf.setTextColor(160, 160, 160);
-        pdf.setFontSize(7);
-        pdf.text(`Código: ${product.code || 'N/A'}`, boxX + 5, y + boxH - 12);
-        if (product.status === 'disponible') pdf.setTextColor(110, 231, 183);
-        else if (product.status === 'vendido') pdf.setTextColor(252, 165, 165);
-        else pdf.setTextColor(252, 211, 77);
-        pdf.text(product.status.toUpperCase(), boxX + 5, y + boxH - 5);
-        if (count % 2 === 1) y += boxH + 8;
-        count++;
+      const margin = 12;
+      const gap = 4;
+      const boxW = (pw - margin * 2 - gap) / 2;
+      const imgH = 38;
+      const textH = 14;
+      const boxH = imgH + textH;
+
+      for (const [style, items] of Object.entries(grouped)) {
+        // Título de sección por estilo
+        const needsNewPage = y + 8 > ph - 10;
+        if (count > 0 && needsNewPage) { newPage(); drawHeader(genderLabels[genderFilter] || 'Catálogo Completo'); y = 28; }
+        if (count === 0 && y < 30) y = 28;
+
+        pdf.setTextColor(212, 175, 55); pdf.setFontSize(10);
+        pdf.text(`── ${styleLabelsPDF[style] || style} (${items.length}) ──`, pw / 2, y + 3, { align: 'center' });
+        y += 7;
+
+        for (const product of items) {
+          // Nueva página si no caben 2 filas (4 productos)
+          if (y + boxH * 2 + gap * 2 + 10 > ph) { newPage(); drawHeader(genderLabels[genderFilter] || 'Catálogo Completo'); y = 28; }
+
+          const col = count % 2;
+          const row = Math.floor(count / 2) % 2;
+          const boxX = margin + col * (boxW + gap);
+          const boxY = y + row * (boxH + gap);
+
+          // Caja
+          pdf.setFillColor(17, 17, 17);
+          pdf.roundedRect(boxX, boxY, boxW, boxH, 2, 2, 'F');
+          pdf.setDrawColor(40, 40, 40); pdf.setLineWidth(0.2);
+          pdf.roundedRect(boxX, boxY, boxW, boxH, 2, 2, 'S');
+
+          // Imagen
+          if (product.image_url) {
+            try {
+              const imgData = await loadImage(product.image_url);
+              if (imgData) pdf.addImage(imgData, 'JPEG', boxX + 1, boxY + 1, boxW - 2, imgH);
+              else { pdf.setFillColor(30, 30, 30); pdf.rect(boxX + 1, boxY + 1, boxW - 2, imgH, 'F'); }
+            } catch { pdf.setFillColor(30, 30, 30); pdf.rect(boxX + 1, boxY + 1, boxW - 2, imgH, 'F'); }
+          } else {
+            pdf.setFillColor(30, 30, 30); pdf.rect(boxX + 1, boxY + 1, boxW - 2, imgH, 'F');
+          }
+
+          // Marca de agua sobre imagen
+          if (product.status !== 'disponible') drawWatermark(boxX + 1, boxY + 1, boxW - 2, imgH, product.status);
+
+          // Texto info
+          const textY = boxY + imgH + 3;
+          pdf.setFontSize(7); pdf.setTextColor(255, 255, 255);
+          pdf.text(pdf.splitTextToSize(product.description || 'Sin descripción', boxW - 8).slice(0, 1), boxX + 4, textY);
+          pdf.setFontSize(6); pdf.setTextColor(120, 120, 120);
+          pdf.text(product.code ? `#${product.code}` : styleLabelsPDF[product.style] || '', boxX + 4, textY + 4);
+          // Badge estado
+          const badgeColors: Record<string, [number, number, number]> = {
+            disponible: [110, 231, 183], agotado: [252, 100, 100], reservado: [252, 211, 77], vendido: [252, 165, 100],
+          };
+          const bc = badgeColors[product.status] || [160, 160, 160];
+          pdf.setTextColor(bc[0], bc[1], bc[2]); pdf.setFontSize(6);
+          pdf.text(product.status.toUpperCase(), boxX + boxW - 4, textY + 4, { align: 'right' });
+
+          count++;
+          // Avanzar Y cada 2 productos (una fila)
+          if (col === 1 && row === 1) { y += boxH * 2 + gap * 2 + 5; }
+        }
+        // Si quedó una fila incompleta, avanzar Y
+        if (count % 4 !== 0) { y += (Math.ceil((count % 4) / 2)) * (boxH + gap) + 5; }
+        else { y += 5; }
       }
-      if (count === 0) {
-        pdf.setTextColor(160, 160, 160);
-        pdf.setFontSize(12);
-        pdf.text('No hay productos para exportar', pageWidth / 2, pageHeight / 2, { align: 'center' });
-      }
-      pdf.save('juanita-pelaez-vision-catalogo.pdf');
-      showToast('PDF generado correctamente');
+
+      pdf.save('juanita-pelaez-catalogo.pdf');
+      showToast('PDF generado correctamente ✅');
     } catch (err) { console.error(err); showToast('Error al generar PDF', 'error'); }
   };
 
@@ -593,7 +707,7 @@ export default function Page() {
             <p className="text-[10px] text-[#A0A0A0] tracking-widest uppercase">Visión Profesional</p>
           </div>
         </div>
-        <button onClick={shareCatalog} className="p-2 rounded-full hover:bg-[#1a1a1a] transition-colors">
+        <button onClick={shareCatalogWhatsApp} className="p-2 rounded-full hover:bg-[#1a1a1a] transition-colors" title="Compartir catálogo por WhatsApp">
           <Share2 size={18} className="text-[#D4AF37]" />
         </button>
       </header>
@@ -823,7 +937,8 @@ export default function Page() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-white">Catálogo</h2>
                 <div className="flex gap-2">
-                  <button onClick={exportPDF} className="p-2 rounded-lg bg-[#111] border border-[#222] text-[#D4AF37] hover:bg-[#1a1a1a] transition-colors" title="Exportar PDF"><FileText size={18} /></button>
+                  <button onClick={shareCatalogWhatsApp} className="p-2 rounded-lg bg-[#111] border border-[#222] text-green-400 hover:bg-[#1a1a1a] transition-colors" title="Compartir por WhatsApp"><Share2 size={18} /></button>
+                  <button onClick={exportPDF} className="p-2 rounded-lg bg-[#111] border border-[#222] text-[#D4AF37] hover:bg-[#1a1a1a] transition-colors" title="Descargar PDF"><FileText size={18} /></button>
                   <button onClick={() => { setEditingProduct(null); setUploadForm({ image_url: '', description: '', gender: '', style: '', status: 'disponible', code: '' }); setShowUploadForm(true); }} className="btn-gold flex items-center gap-1 text-sm px-3 py-2"><Plus size={16} /> Subir</button>
                 </div>
               </div>
