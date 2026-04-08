@@ -12,73 +12,63 @@ export async function POST(req: NextRequest) {
     }
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || 'juanita_preset';
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
-    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET;
 
-    if (!cloudName || !apiKey || !apiSecret) {
+    if (!cloudName) {
       return NextResponse.json(
-        { error: 'Cloudinary no está completamente configurado. Verifique CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET en las variables de entorno.' },
+        { error: 'Cloudinary no configurado. Agregue CLOUDINARY_CLOUD_NAME.' },
         { status: 500 }
       );
     }
 
-    // Generar firma (signature) para signed upload
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const signatureStr = `timestamp=${timestamp}&folder=${folder}`;
-    const signature = crypto
-      .createHash('sha1')
-      .update(signatureStr + apiSecret)
-      .digest('hex');
+    // Intentar UNSIGNED upload primero (solo necesita cloud name + preset)
+    const unsignedForm = new FormData();
+    unsignedForm.append('file', file);
+    unsignedForm.append('upload_preset', uploadPreset);
+    unsignedForm.append('folder', folder);
 
-    // Construir FormData para Cloudinary
-    const uploadFormData = new FormData();
-    uploadFormData.append('file', file);
-    uploadFormData.append('timestamp', timestamp);
-    uploadFormData.append('api_key', apiKey);
-    uploadFormData.append('signature', signature);
-    uploadFormData.append('folder', folder);
-
-    // Si hay un upload preset unsigned como fallback, lo agregamos
-    if (uploadPreset) {
-      uploadFormData.append('upload_preset', uploadPreset);
-    }
-
-    const response = await fetch(
+    let response = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-      {
-        method: 'POST',
-        body: uploadFormData,
-      }
+      { method: 'POST', body: unsignedForm }
     );
+
+    // Si unsigned falla y tenemos API key + secret, intentar signed upload
+    if (!response.ok && apiKey && apiSecret) {
+      const errData = await response.json().catch(() => null);
+      console.warn('Unsigned upload failed, trying signed:', errData?.error?.message);
+
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signatureStr = `timestamp=${timestamp}&folder=${folder}`;
+      const signature = crypto
+        .createHash('sha1')
+        .update(signatureStr + apiSecret)
+        .digest('hex');
+
+      const signedForm = new FormData();
+      signedForm.append('file', file);
+      signedForm.append('timestamp', timestamp);
+      signedForm.append('api_key', apiKey);
+      signedForm.append('signature', signature);
+      signedForm.append('folder', folder);
+
+      response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        { method: 'POST', body: signedForm }
+      );
+    }
 
     if (!response.ok) {
       const errData = await response.json().catch(() => null);
-      console.error('Cloudinary error:', JSON.stringify(errData));
       const msg = errData?.error?.message || `Error al subir imagen: ${response.status}`;
+      console.error('Cloudinary upload error:', JSON.stringify(errData));
 
-      // Si falla el signed upload, intentar unsigned como fallback
-      if (uploadPreset && !errData?.error?.message?.includes('Invalid')) {
-        const unsignedForm = new FormData();
-        unsignedForm.append('file', file);
-        unsignedForm.append('upload_preset', uploadPreset);
-        unsignedForm.append('folder', folder);
-
-        const unsignedRes = await fetch(
-          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-          { method: 'POST', body: unsignedForm }
-        );
-
-        if (unsignedRes.ok) {
-          const unsignedData = await unsignedRes.json();
-          return NextResponse.json({
-            url: unsignedData.secure_url,
-            public_id: unsignedData.public_id,
-            width: unsignedData.width,
-            height: unsignedData.height,
-            format: unsignedData.format,
-          });
-        }
+      // Mensaje de ayuda si falta el preset
+      if (msg.includes('preset') || msg.includes('Upload preset')) {
+        return NextResponse.json({
+          error: `Falta el upload preset "${uploadPreset}". Crea uno en cloudinary.com → Settings → Upload → Add Upload Preset → Nombre: "${uploadPreset}" → Signing Mode: Unsigned`,
+        }, { status: 400 });
       }
 
       return NextResponse.json({ error: msg }, { status: response.status });
@@ -98,7 +88,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE: Eliminar imagen de Cloudinary usando signed request
+// DELETE: Eliminar imagen de Cloudinary
 export async function DELETE(req: NextRequest) {
   try {
     const { public_id } = await req.json();
@@ -113,12 +103,11 @@ export async function DELETE(req: NextRequest) {
 
     if (!cloudName || !apiKey || !apiSecret) {
       return NextResponse.json(
-        { error: 'Cloudinary no configurado completamente' },
+        { error: 'Cloudinary no configurado completamente para eliminar' },
         { status: 500 }
       );
     }
 
-    // Generar firma para eliminar
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const signature = crypto
       .createHash('sha1')
@@ -139,10 +128,10 @@ export async function DELETE(req: NextRequest) {
     const data = await response.json();
 
     if (data.result === 'ok') {
-      return NextResponse.json({ success: true, message: 'Imagen eliminada correctamente' });
+      return NextResponse.json({ success: true, message: 'Imagen eliminada' });
     }
 
-    return NextResponse.json({ error: data.error?.message || 'Error al eliminar imagen' }, { status: 400 });
+    return NextResponse.json({ error: data.error?.message || 'Error al eliminar' }, { status: 400 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json({ error: message }, { status: 500 });
