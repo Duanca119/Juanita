@@ -1,0 +1,2 @@
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+CREATE POLICY all_products ON products FOR ALL USING (true) WITH CHECK (true);
