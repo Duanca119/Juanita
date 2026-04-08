@@ -256,20 +256,17 @@ export default function Page() {
   const uploadImage = async (file: File): Promise<string> => {
     setUploadingImage(true);
     try {
-      const reader = new FileReader();
-      const base64: string = await new Promise((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'juanita-vision');
+
       const res = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: base64, folder: 'juanita-vision' }),
+        body: formData,
       });
       const data = await res.json();
       if (res.ok) return data.url;
-      if (data.fallback) return base64;
-      throw new Error(data.error);
+      throw new Error(data.error || 'Error al subir imagen');
     } finally {
       setUploadingImage(false);
     }
