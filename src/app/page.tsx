@@ -350,16 +350,18 @@ export default function Page() {
     } catch { /* ignore */ }
   };
 
-  const toggleProductStatus = async (product: Product) => {
-    const statuses = ['disponible', 'agotado', 'reservado', 'vendido'];
-    const next = statuses[(statuses.indexOf(product.status) + 1) % statuses.length];
+  const updateProductStatus = async (product: Product, newStatus: string) => {
+    if (product.status === newStatus) return;
     try {
       const res = await fetch('/api/products', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: product.id, status: next }),
+        body: JSON.stringify({ id: product.id, status: newStatus }),
       });
-      if (res.ok) { fetchProducts(); showToast(`Estado: ${next}`); }
+      if (res.ok) {
+        fetchProducts();
+        showToast(`Estado: ${newStatus}`);
+      }
     } catch { /* ignore */ }
   };
 
@@ -826,13 +828,16 @@ export default function Page() {
                 </div>
               </div>
 
+              {/* 5 Catálogos principales + Todos */}
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {['todos', 'mujer', 'hombre', 'nino', 'unisex', 'gafas_de_sol'].map((g) => (
-                  <button key={g} onClick={() => setGenderFilter(g)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${genderFilter === g ? 'bg-[#D4AF37] text-black' : 'bg-[#111] text-[#888] border border-[#222]'}`}>
-                    {g === 'todos' ? 'Todos' : g === 'gafas_de_sol' ? 'Sol' : g.charAt(0).toUpperCase() + g.slice(1).replace('_', ' ')}
+                  <button key={g} onClick={() => setGenderFilter(g)} className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${genderFilter === g ? 'bg-[#D4AF37] text-black' : 'bg-[#111] text-[#888] border border-[#222]'}`}>
+                    {g === 'todos' ? '📋 Todos' : g === 'mujer' ? '👩 Mujer' : g === 'hombre' ? '👨 Hombre' : g === 'nino' ? '👶 Niños' : g === 'unisex' ? '🧑 Unisex' : '🕶️ Sol'}
                   </button>
                 ))}
               </div>
+
+              {/* Filtro de estado */}
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {['todos', 'disponible', 'agotado', 'reservado', 'vendido'].map((s) => (
                   <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${statusFilter === s ? (s === 'disponible' ? 'bg-green-600 text-white' : s === 'agotado' ? 'bg-red-600 text-white' : s === 'reservado' ? 'bg-yellow-600 text-white' : 'bg-orange-600 text-white') : 'bg-[#111] text-[#888] border border-[#222]'}`}>
@@ -880,7 +885,7 @@ export default function Page() {
                       <div>
                         <label className="text-xs font-bold text-white block mb-1.5">Género *</label>
                         <div className="flex flex-wrap gap-2">
-                          {[{v: 'mujer', l: 'Mujer'}, {v: 'hombre', l: 'Hombre'}, {v: 'unisex', l: 'Unisex'}, {v: 'nino', l: 'Niño'}].map((g) => (
+                          {[{v: 'mujer', l: 'Mujer'}, {v: 'hombre', l: 'Hombre'}, {v: 'unisex', l: 'Unisex'}, {v: 'nino', l: 'Niño'}, {v: 'gafas_de_sol', l: 'Gafas de Sol'}].map((g) => (
                             <button key={g.v} type="button" onClick={() => setUploadForm((f) => ({ ...f, gender: g.v }))} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${uploadForm.gender === g.v ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#0a0a0a] text-[#ccc] border border-[#333] hover:border-[#555]'}`}>{g.l}</button>
                           ))}
                         </div>
@@ -896,12 +901,14 @@ export default function Page() {
                         </div>
                       </div>
 
-                      {/* Estado - Botones grandes */}
+                      {/* Estado - 4 botones */}
                       <div>
                         <label className="text-xs font-bold text-white block mb-1.5">Estado *</label>
-                        <div className="flex gap-3">
-                          <button type="button" onClick={() => setUploadForm((f) => ({ ...f, status: 'disponible' }))} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${uploadForm.status === 'disponible' ? 'bg-green-600 text-white border-green-500' : 'bg-[#0a0a0a] text-[#888] border border-[#333]'}`}>Disponible</button>
-                          <button type="button" onClick={() => setUploadForm((f) => ({ ...f, status: 'agotado' }))} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${uploadForm.status === 'agotado' ? 'bg-red-600 text-white border-red-500' : 'bg-[#0a0a0a] text-[#888] border border-[#333]'}`}>Agotado</button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button type="button" onClick={() => setUploadForm((f) => ({ ...f, status: 'disponible' }))} className={`py-2.5 rounded-xl text-xs font-bold transition-all ${uploadForm.status === 'disponible' ? 'bg-green-600 text-white border-green-500' : 'bg-[#0a0a0a] text-[#888] border border-[#333]'}`}>✅ Disponible</button>
+                          <button type="button" onClick={() => setUploadForm((f) => ({ ...f, status: 'agotado' }))} className={`py-2.5 rounded-xl text-xs font-bold transition-all ${uploadForm.status === 'agotado' ? 'bg-red-600 text-white border-red-500' : 'bg-[#0a0a0a] text-[#888] border border-[#333]'}`}>❌ Agotado</button>
+                          <button type="button" onClick={() => setUploadForm((f) => ({ ...f, status: 'reservado' }))} className={`py-2.5 rounded-xl text-xs font-bold transition-all ${uploadForm.status === 'reservado' ? 'bg-yellow-600 text-white border-yellow-500' : 'bg-[#0a0a0a] text-[#888] border border-[#333]'}`}>📌 Reservado</button>
+                          <button type="button" onClick={() => setUploadForm((f) => ({ ...f, status: 'vendido' }))} className={`py-2.5 rounded-xl text-xs font-bold transition-all ${uploadForm.status === 'vendido' ? 'bg-orange-600 text-white border-orange-500' : 'bg-[#0a0a0a] text-[#888] border border-[#333]'}`}>💰 Vendido</button>
                         </div>
                       </div>
 
@@ -919,50 +926,123 @@ export default function Page() {
                 )}
               </AnimatePresence>
 
-              {/* Product Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {products
-                  .filter((p) => {
-                    if (genderFilter !== 'todos' && p.gender !== genderFilter) return false;
-                    if (statusFilter !== 'todos' && p.status !== statusFilter) return false;
-                    return true;
-                  })
-                  .map((product) => (
-                    <motion.div key={product.id} whileTap={{ scale: 0.98 }} className="rounded-xl overflow-hidden card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                      <div className="relative aspect-square bg-[#0a0a0a]">
-                        {product.image_url ? (
-                          <img src={product.image_url} alt={product.description} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center"><Glasses size={40} className="text-[#333]" /></div>
-                        )}
-                        <div className="absolute top-2 right-2 flex gap-1">
-                          <button onClick={() => startEditProduct(product)} className="p-1.5 rounded-full bg-black/70 text-white hover:text-[#D4AF37] transition-colors"><Edit3 size={14} /></button>
-                          <button onClick={() => deleteProduct(product.id)} className="p-1.5 rounded-full bg-black/70 text-white hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
-                        </div>
-                        <button onClick={() => toggleProductStatus(product)} className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${statusBadge(product.status)}`}>
-                          {product.status}
-                        </button>
-                      </div>
-                      <div className="p-2.5">
-                        <p className="text-xs text-white truncate">{product.description || 'Sin descripción'}</p>
-                        {product.code && <p className="text-[10px] text-[#666] mt-0.5">#{product.code}</p>}
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[10px] text-[#888] capitalize">{product.gender}</span>
-                          <button onClick={() => shareProduct(product)} className="p-1 rounded text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-colors"><Share2 size={12} /></button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-              </div>
+              {/* ==================== PRODUCT CATALOG BY STYLE GROUPS ==================== */}
+              {(() => {
+                // Filtrar productos por género y estado
+                const filtered = products.filter((p) => {
+                  if (genderFilter !== 'todos' && p.gender !== genderFilter) return false;
+                  if (statusFilter !== 'todos' && p.status !== statusFilter) return false;
+                  return true;
+                });
 
-              {products.length === 0 && (
-                <div className="text-center py-12">
-                  <Package size={48} className="text-[#333] mx-auto mb-3" />
-                  <p className="text-[#666]">No hay productos en el catálogo</p>
-                  <p className="text-xs text-[#444] mt-1">Crea la tabla &quot;products&quot; en Supabase primero (ver Admin → Base Datos)</p>
-                  <button onClick={() => setShowUploadForm(true)} className="mt-4 btn-gold text-sm px-4 py-2">Subir Primer Producto</button>
-                </div>
-              )}
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <Package size={48} className="text-[#333] mx-auto mb-3" />
+                      <p className="text-[#666]">No hay productos en este catálogo</p>
+                      <button onClick={() => setShowUploadForm(true)} className="mt-4 btn-gold text-sm px-4 py-2">Subir Producto</button>
+                    </div>
+                  );
+                }
+
+                // Orden de estilos para agrupar
+                const styleOrder = ['cuadrada', 'cat_eye', 'ovalada', 'redonda', 'rectangular', 'aviator', 'wayfarer', 'clubmaster', 'classic', 'sport', 'vintage', 'modern', 'bold', 'media_luna', 'otro'];
+                const styleLabels: Record<string, string> = {
+                  cuadrada: '📐 Cuadradas', cat_eye: '🐱 Cat Eye', ovalada: '⚪ Ovaladas',
+                  redonda: '🔴 Redondas', rectangular: '▬ Rectangulares', aviator: '✈️ Aviador',
+                  wayfarer: '🌊 Wayfarer', clubmaster: '🎩 Clubmaster', classic: '👑 Classic',
+                  sport: '⚡ Sport', vintage: '🎞️ Vintage', modern: '💎 Modern',
+                  bold: '💪 Bold', media_luna: '🌙 Media Luna', otro: '✨ Otros',
+                };
+
+                // Agrupar por estilo, manteniendo orden
+                const grouped: Record<string, typeof filtered> = {};
+                styleOrder.forEach((s) => {
+                  const items = filtered.filter((p) => p.style === s);
+                  if (items.length > 0) grouped[s] = items;
+                });
+                // Productos con estilo no reconocido
+                const others = filtered.filter((p) => !styleOrder.includes(p.style));
+                if (others.length > 0) grouped['otro'] = others;
+
+                return (
+                  <div className="space-y-6">
+                    {Object.entries(grouped).map(([style, items]) => (
+                      <div key={style}>
+                        {/* Encabezado de grupo por estilo */}
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="h-px flex-1 bg-[#222]" />
+                          <h3 className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider whitespace-nowrap">
+                            {styleLabels[style] || style}
+                          </h3>
+                          <span className="text-[10px] text-[#555] bg-[#1a1a1a] px-2 py-0.5 rounded-full">{items.length}</span>
+                          <div className="h-px flex-1 bg-[#222]" />
+                        </div>
+
+                        {/* Grid de productos del grupo */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                          {items.map((product) => (
+                            <motion.div key={product.id} whileTap={{ scale: 0.98 }} className="rounded-xl overflow-hidden card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                              <div className="relative aspect-square bg-[#0a0a0a]">
+                                {product.image_url ? (
+                                  <>
+                                    <img src={product.image_url} alt={product.description} className="w-full h-full object-cover" />
+                                    {/* Marca de agua AGOTADO */}
+                                    {product.status === 'agotado' && (
+                                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="absolute inset-0 bg-black/40" />
+                                        <span className="relative text-red-500 font-black text-xl sm:text-2xl uppercase tracking-widest opacity-80" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8), -1px -1px 2px rgba(0,0,0,0.5)', transform: 'rotate(-15deg)' }}>AGOTADO</span>
+                                      </div>
+                                    )}
+                                    {/* Marca de agua VENDIDO */}
+                                    {product.status === 'vendido' && (
+                                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="absolute inset-0 bg-black/30" />
+                                        <span className="relative text-orange-400 font-black text-xl sm:text-2xl uppercase tracking-widest opacity-70" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)', transform: 'rotate(-15deg)' }}>VENDIDO</span>
+                                      </div>
+                                    )}
+                                    {/* Marca de agua RESERVADO */}
+                                    {product.status === 'reservado' && (
+                                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="absolute inset-0 bg-black/20" />
+                                        <span className="relative text-yellow-400 font-black text-xl sm:text-2xl uppercase tracking-widest opacity-70" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)', transform: 'rotate(-15deg)' }}>RESERVADO</span>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center"><Glasses size={40} className="text-[#333]" /></div>
+                                )}
+                                {/* Botones editar / borrar */}
+                                <div className="absolute top-2 right-2 flex gap-1">
+                                  <button onClick={() => startEditProduct(product)} className="p-1.5 rounded-full bg-black/70 text-white hover:text-[#D4AF37] transition-colors" title="Editar"><Edit3 size={14} /></button>
+                                  <button onClick={() => deleteProduct(product.id)} className="p-1.5 rounded-full bg-black/70 text-white hover:text-red-400 transition-colors" title="Borrar"><Trash2 size={14} /></button>
+                                </div>
+                              </div>
+
+                              {/* Info del producto + botones de estado */}
+                              <div className="p-2.5 space-y-2">
+                                <p className="text-xs text-white truncate font-medium">{product.description || 'Sin descripción'}</p>
+                                {product.code && <p className="text-[10px] text-[#666]">#{product.code}</p>}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-[#888] capitalize">{(styleLabels[product.style] || product.style).replace(/^[^\s]+\s/, '')}</span>
+                                  <button onClick={() => shareProduct(product)} className="p-1 rounded text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-colors"><Share2 size={12} /></button>
+                                </div>
+                                {/* 4 botones de estado */}
+                                <div className="grid grid-cols-4 gap-1 pt-1">
+                                  <button onClick={() => updateProductStatus(product, 'disponible')} className={`py-1 rounded-lg text-[9px] font-bold transition-all ${product.status === 'disponible' ? 'bg-green-600 text-white' : 'bg-[#0a0a0a] text-[#555] hover:text-green-400'}`}>Disp.</button>
+                                  <button onClick={() => updateProductStatus(product, 'agotado')} className={`py-1 rounded-lg text-[9px] font-bold transition-all ${product.status === 'agotado' ? 'bg-red-600 text-white' : 'bg-[#0a0a0a] text-[#555] hover:text-red-400'}`}>Agot.</button>
+                                  <button onClick={() => updateProductStatus(product, 'reservado')} className={`py-1 rounded-lg text-[9px] font-bold transition-all ${product.status === 'reservado' ? 'bg-yellow-600 text-white' : 'bg-[#0a0a0a] text-[#555] hover:text-yellow-400'}`}>Res.</button>
+                                  <button onClick={() => updateProductStatus(product, 'vendido')} className={`py-1 rounded-lg text-[9px] font-bold transition-all ${product.status === 'vendido' ? 'bg-orange-600 text-white' : 'bg-[#0a0a0a] text-[#555] hover:text-orange-400'}`}>Vend.</button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </motion.div>
           )}
 
