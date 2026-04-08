@@ -576,13 +576,26 @@ export default function Page() {
       };
       const styleOrder = ['cuadrada', 'cat_eye', 'ovalada', 'redonda', 'rectangular', 'aviator', 'wayfarer', 'clubmaster', 'classic', 'sport', 'vintage', 'modern', 'bold', 'media_luna', 'otro'];
 
-      // Agrupar por estilo
-      const grouped: Record<string, typeof filtered> = {};
-      styleOrder.forEach((s) => { const items = filtered.filter((p) => p.style === s); if (items.length) grouped[s] = items; });
-      const others = filtered.filter((p) => !styleOrder.includes(p.style));
-      if (others.length) grouped['otro'] = others;
+      // Agrupar: MATERIAL → ESTILO → productos
+      const materialOrder = ['Acetato', 'Metal', 'TR90', 'Titanio', 'Acerada', 'Mixta', 'Tres Piezas'];
+      const byMaterial: Record<string, Record<string, typeof filtered>> = {};
+      materialOrder.forEach((mat) => {
+        const matProducts = filtered.filter((p) => p.description === mat);
+        if (!matProducts.length) return;
+        byMaterial[mat] = {};
+        styleOrder.forEach((s) => { const items = matProducts.filter((p) => p.style === s); if (items.length) byMaterial[mat][s] = items; });
+        const others = matProducts.filter((p) => !styleOrder.includes(p.style));
+        if (others.length) byMaterial[mat]['otro'] = others;
+      });
+      const unknownMat = filtered.filter((p) => !materialOrder.includes(p.description));
+      if (unknownMat.length) {
+        byMaterial['Otros'] = {};
+        styleOrder.forEach((s) => { const items = unknownMat.filter((p) => p.style === s); if (items.length) byMaterial['Otros'][s] = items; });
+        const others = unknownMat.filter((p) => !styleOrder.includes(p.style));
+        if (others.length) byMaterial['Otros']['otro'] = others;
+      }
 
-      if (Object.keys(grouped).length === 0) {
+      if (Object.keys(byMaterial).length === 0) {
         pdf.setFillColor(0, 0, 0); pdf.rect(0, 0, pw, ph, 'F');
         drawHeader('Sin productos');
         pdf.setTextColor(160, 160, 160); pdf.setFontSize(12);
@@ -606,15 +619,25 @@ export default function Page() {
       const textH = 14;
       const boxH = imgH + textH;
 
-      for (const [style, items] of Object.entries(grouped)) {
-        // Título de sección por estilo
-        const needsNewPage = y + 8 > ph - 10;
-        if (count > 0 && needsNewPage) { newPage(); drawHeader(genderLabels[genderFilter] || 'Catálogo Completo'); y = 28; }
+      for (const [material, styles] of Object.entries(byMaterial)) {
+        // Título de sección por MATERIAL
+        const needsNewPageMat = y + 10 > ph - 10;
+        if (count > 0 && needsNewPageMat) { newPage(); drawHeader(genderLabels[genderFilter] || 'Catálogo Completo'); y = 28; }
         if (count === 0 && y < 30) y = 28;
 
-        pdf.setTextColor(212, 175, 55); pdf.setFontSize(10);
-        pdf.text(`── ${styleLabelsPDF[style] || style} (${items.length}) ──`, pw / 2, y + 3, { align: 'center' });
-        y += 7;
+        pdf.setTextColor(212, 175, 55); pdf.setFontSize(11);
+        pdf.text(`─── ${material} (${Object.values(styles).flat().length}) ───`, pw / 2, y + 3, { align: 'center' });
+        y += 8;
+
+        // Sub-grupos por estilo dentro del material
+        for (const [style, items] of Object.entries(styles)) {
+          // Título de sub-sección por ESTILO
+          const needsNewPageStyle = y + 8 > ph - 10;
+          if (count > 0 && needsNewPageStyle) { newPage(); drawHeader(genderLabels[genderFilter] || 'Catálogo Completo'); y = 28; }
+
+          pdf.setTextColor(160, 160, 160); pdf.setFontSize(8);
+          pdf.text(`${styleLabelsPDF[style] || style} (${items.length})`, pw / 2, y + 2, { align: 'center' });
+          y += 6;
 
         for (const product of items) {
           // Nueva página si no caben 2 filas (4 productos)
@@ -666,7 +689,8 @@ export default function Page() {
         // Si quedó una fila incompleta, avanzar Y
         if (count % 4 !== 0) { y += (Math.ceil((count % 4) / 2)) * (boxH + gap) + 5; }
         else { y += 5; }
-      }
+        } // fin sub-grupo estilo
+      } // fin material
 
       pdf.save('juanita-pelaez-catalogo.pdf');
       showToast('PDF generado correctamente ✅');
@@ -1060,7 +1084,8 @@ export default function Page() {
                   );
                 }
 
-                // Orden de estilos para agrupar
+                // Orden: primero por MATERIAL, luego por ESTILO
+                const materialOrder = ['Acetato', 'Metal', 'TR90', 'Titanio', 'Acerada', 'Mixta', 'Tres Piezas'];
                 const styleOrder = ['cuadrada', 'cat_eye', 'ovalada', 'redonda', 'rectangular', 'aviator', 'wayfarer', 'clubmaster', 'classic', 'sport', 'vintage', 'modern', 'bold', 'media_luna', 'otro'];
                 const styleLabels: Record<string, string> = {
                   cuadrada: '📐 Cuadradas', cat_eye: '🐱 Cat Eye', ovalada: '⚪ Ovaladas',
@@ -1070,33 +1095,61 @@ export default function Page() {
                   bold: '💪 Bold', media_luna: '🌙 Media Luna', otro: '✨ Otros',
                 };
 
-                // Agrupar por estilo, manteniendo orden
-                const grouped: Record<string, typeof filtered> = {};
-                styleOrder.forEach((s) => {
-                  const items = filtered.filter((p) => p.style === s);
-                  if (items.length > 0) grouped[s] = items;
+                // Agrupar: material → estilo → productos
+                const byMaterial: Record<string, Record<string, typeof filtered>> = {};
+                materialOrder.forEach((mat) => {
+                  const matProducts = filtered.filter((p) => p.description === mat);
+                  if (matProducts.length === 0) return;
+                  byMaterial[mat] = {};
+                  styleOrder.forEach((s) => {
+                    const items = matProducts.filter((p) => p.style === s);
+                    if (items.length > 0) byMaterial[mat][s] = items;
+                  });
+                  const others = matProducts.filter((p) => !styleOrder.includes(p.style));
+                  if (others.length > 0) byMaterial[mat]['otro'] = others;
                 });
-                // Productos con estilo no reconocido
-                const others = filtered.filter((p) => !styleOrder.includes(p.style));
-                if (others.length > 0) grouped['otro'] = others;
+                // Productos con material no reconocido
+                const unknownMat = filtered.filter((p) => !materialOrder.includes(p.description));
+                if (unknownMat.length > 0) {
+                  byMaterial['Otros'] = {};
+                  styleOrder.forEach((s) => {
+                    const items = unknownMat.filter((p) => p.style === s);
+                    if (items.length > 0) byMaterial['Otros'][s] = items;
+                  });
+                  const others = unknownMat.filter((p) => !styleOrder.includes(p.style));
+                  if (others.length > 0) byMaterial['Otros']['otro'] = others;
+                }
 
                 return (
-                  <div className="space-y-6">
-                    {Object.entries(grouped).map(([style, items]) => (
-                      <div key={style}>
-                        {/* Encabezado de grupo por estilo */}
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="h-px flex-1 bg-[#222]" />
-                          <h3 className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider whitespace-nowrap">
-                            {styleLabels[style] || style}
+                  <div className="space-y-8">
+                    {Object.entries(byMaterial).map(([material, styles]) => (
+                      <div key={material}>
+                        {/* Encabezado de MATERIAL */}
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="h-px flex-1 bg-[#D4AF37]/30" />
+                          <h3 className="text-sm font-bold text-[#D4AF37] uppercase tracking-wider whitespace-nowrap">
+                            {material}
                           </h3>
-                          <span className="text-[10px] text-[#555] bg-[#1a1a1a] px-2 py-0.5 rounded-full">{items.length}</span>
-                          <div className="h-px flex-1 bg-[#222]" />
+                          <span className="text-[10px] text-[#555] bg-[#1a1a1a] px-2 py-0.5 rounded-full border border-[#D4AF37]/20">
+                            {Object.values(styles).flat().length}
+                          </span>
+                          <div className="h-px flex-1 bg-[#D4AF37]/30" />
                         </div>
 
-                        {/* Grid de productos del grupo */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {items.map((product) => (
+                        {/* Sub-grupos por ESTILO */}
+                        {Object.entries(styles).map(([style, items]) => (
+                          <div key={style} className="mb-5">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="h-px flex-1 bg-[#222]" />
+                              <h4 className="text-[10px] font-semibold text-[#888] uppercase tracking-wider whitespace-nowrap">
+                                {styleLabels[style] || style}
+                              </h4>
+                              <span className="text-[9px] text-[#444] bg-[#0a0a0a] px-1.5 py-0.5 rounded-full">{items.length}</span>
+                              <div className="h-px flex-1 bg-[#222]" />
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                              {items.map((product) => (
                             <motion.div key={product.id} whileTap={{ scale: 0.98 }} className="rounded-xl overflow-hidden card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
                               <div className="relative aspect-square bg-[#0a0a0a]">
                                 {product.image_url ? (
@@ -1152,7 +1205,9 @@ export default function Page() {
                               </div>
                             </motion.div>
                           ))}
-                        </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ))}
                   </div>
