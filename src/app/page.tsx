@@ -298,11 +298,17 @@ export default function Page() {
   };
 
   // Escuchar mensajes del Service Worker sobre nueva versión
+  // Solo mostrar el banner una vez por versión usando sessionStorage
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       const handleMessage = (event: MessageEvent) => {
         if (event.data?.type === 'NEW_VERSION') {
-          setShowUpdateBanner(true);
+          const newVersion = event.data.version;
+          const seenVersion = sessionStorage.getItem('jp_update_version');
+          if (newVersion !== seenVersion) {
+            setShowUpdateBanner(true);
+            sessionStorage.setItem('jp_update_version', newVersion);
+          }
         }
       };
       navigator.serviceWorker.addEventListener('message', handleMessage);
