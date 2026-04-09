@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import ZAI from 'z-ai-web-dev-sdk';
 
 export async function POST(req: NextRequest) {
   try {
     const { imageData } = await req.json();
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey || apiKey === 'PUT_YOUR_GEMINI_API_KEY_HERE') {
-      return NextResponse.json(
-        { error: 'API key de Gemini no configurada' },
-        { status: 500 }
-      );
-    }
 
     if (!imageData) {
       return NextResponse.json(
@@ -19,6 +12,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Extraer base64
     const base64Data = imageData.includes('base64,')
       ? imageData.split('base64,')[1]
       : imageData;
@@ -44,44 +38,36 @@ Retorna ÚNICAMENTE un objeto JSON con esta estructura exacta, sin texto adicion
 Si no encuentras un valor, déjalo como cadena vacía "".
 Los valores numéricos pueden incluir signo + o - y hasta 2 decimales.`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
+    // Usar z-ai-web-dev-sdk para análisis de imagen (sin límite de rate)
+    const zai = await ZAI.create();
+
+    const completion = await zai.chat.completions.create({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
             {
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: 'image/png',
-                    data: base64Data,
-                  },
-                },
-              ],
+              type: 'image_url',
+              image_url: {
+                url: `data:image/png;base64,${base64Data}`,
+              },
             },
           ],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1024,
-          },
-        }),
-      }
-    );
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 1024,
+    });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Gemini API error:', errText);
+    const text = completion.choices?.[0]?.message?.content || '';
+
+    if (!text) {
       return NextResponse.json(
-        { error: `Error de Gemini API: ${response.status}` },
-        { status: response.status }
+        { error: 'No se pudo analizar la imagen. Intenta de nuevo.' },
+        { status: 422 }
       );
     }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     // Limpiar respuesta y parsear JSON
     const cleanText = text
@@ -93,7 +79,6 @@ Los valores numéricos pueden incluir signo + o - y hasta 2 decimales.`;
     try {
       prescription = JSON.parse(cleanText);
     } catch {
-      // Intentar extraer JSON de la respuesta
       const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         prescription = JSON.parse(jsonMatch[0]);
