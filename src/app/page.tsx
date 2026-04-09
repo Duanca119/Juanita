@@ -1693,6 +1693,7 @@ export default function Page() {
                     'Blue Vision Sencilla': { bg: 'bg-sky-500/20 border-sky-600/30', label: '🔵 Blue Vision' },
                     'Bifocales': { bg: 'bg-green-500/20 border-green-600/30', label: '🟢 Bifocales' },
                     'Talla Convencional': { bg: 'bg-blue-800/30 border-blue-700/30', label: '🔷 Convencional' },
+                    'Lentes Terminados Progresivos': { bg: 'bg-purple-500/20 border-purple-600/30', label: '🟣 Progresivos' },
                   };
                   return Object.entries(catColors).map(([cat, { bg, label }]) => (
                     <div key={cat} className={`rounded-lg p-2.5 text-center border ${bg}`}>
@@ -1723,6 +1724,7 @@ export default function Page() {
                           <option value="Blue Vision Sencilla">Blue Vision Sencilla</option>
                           <option value="Bifocales">Bifocales</option>
                           <option value="Talla Convencional">Talla Convencional</option>
+                          <option value="Lentes Terminados Progresivos">Lentes Terminados Progresivos</option>
                         </select>
                         <input className="premium-input text-xs" placeholder="Material" value={addLensForm.material} onChange={(e) => setAddLensForm({ ...addLensForm, material: e.target.value })} />
                         <input className="premium-input text-xs" placeholder="Tipo lente (opcional)" value={addLensForm.tipo_lente} onChange={(e) => setAddLensForm({ ...addLensForm, tipo_lente: e.target.value })} />
@@ -1748,12 +1750,13 @@ export default function Page() {
                 </div>
               ) : (
                 (() => {
-                  const categoryOrder = ['Lentes Terminados', 'Blue Vision Sencilla', 'Bifocales', 'Talla Convencional'];
+                  const categoryOrder = ['Lentes Terminados', 'Blue Vision Sencilla', 'Lentes Terminados Progresivos', 'Bifocales', 'Talla Convencional'];
                   const categoryStyles: Record<string, { headerBg: string; headerText: string; rowBg: string; borderColor: string; accentColor: string }> = {
                     'Lentes Terminados': { headerBg: 'background: rgba(234,179,8,0.15)', headerText: 'color: #EAB308', rowBg: 'background: rgba(234,179,8,0.05)', borderColor: 'border-color: rgba(234,179,8,0.2)', accentColor: '#EAB308' },
                     'Blue Vision Sencilla': { headerBg: 'background: rgba(56,189,248,0.12)', headerText: 'color: #38BDF8', rowBg: 'background: rgba(56,189,248,0.04)', borderColor: 'border-color: rgba(56,189,248,0.2)', accentColor: '#38BDF8' },
                     'Bifocales': { headerBg: 'background: rgba(34,197,94,0.12)', headerText: 'color: #22C55E', rowBg: 'background: rgba(34,197,94,0.04)', borderColor: 'border-color: rgba(34,197,94,0.2)', accentColor: '#22C55E' },
                     'Talla Convencional': { headerBg: 'background: rgba(59,130,246,0.15)', headerText: 'color: #60A5FA', rowBg: 'background: rgba(59,130,246,0.04)', borderColor: 'border-color: rgba(59,130,246,0.2)', accentColor: '#60A5FA' },
+                    'Lentes Terminados Progresivos': { headerBg: 'background: rgba(168,85,247,0.12)', headerText: 'color: #A855F7', rowBg: 'background: rgba(168,85,247,0.04)', borderColor: 'border-color: rgba(168,85,247,0.2)', accentColor: '#A855F7' },
                   };
                   const grouped = categoryOrder.map(cat => ({
                     name: cat,
@@ -1848,8 +1851,8 @@ export default function Page() {
                                 <th className="text-left px-3 py-2 font-medium w-6">#</th>
                                 <th className="text-left px-3 py-2 font-medium" style={{ minWidth: '140px' }}>Material</th>
                                 <th className="text-left px-3 py-2 font-medium">Esferas</th>
-                                {!(group.name === 'Bifocales') && <th className="text-left px-3 py-2 font-medium">Cilindro</th>}
-                                {(group.name === 'Bifocales') && <th className="text-left px-3 py-2 font-medium">Adición</th>}
+                                {!(group.name === 'Bifocales' || group.name === 'Lentes Terminados Progresivos') && <th className="text-left px-3 py-2 font-medium">Cilindro</th>}
+                                {(group.name === 'Bifocales' || group.name === 'Lentes Terminados Progresivos') && <th className="text-left px-3 py-2 font-medium">Adición</th>}
                                 <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Precio Par</th>
                                 {currentUser?.role === 'admin' && <th className="text-center px-3 py-2 font-medium">Acciones</th>}
                               </tr>
@@ -1860,8 +1863,8 @@ export default function Page() {
                                   <td className="px-3 py-2 text-[#666]">{idx + 1}</td>
                                   <td className="px-3 py-2 text-white font-medium whitespace-nowrap">{item.material}</td>
                                   <td className="px-3 py-2 text-[#ccc]">{item.esferas || '—'}</td>
-                                  {!(group.name === 'Bifocales') && <td className="px-3 py-2 text-[#ccc]">{item.cilindro || '—'}</td>}
-                                  {(group.name === 'Bifocales') && <td className="px-3 py-2 text-[#ccc]">{item.adicion || '—'}</td>}
+                                  {!(group.name === 'Bifocales' || group.name === 'Lentes Terminados Progresivos') && <td className="px-3 py-2 text-[#ccc]">{item.cilindro || '—'}</td>}
+                                  {(group.name === 'Bifocales' || group.name === 'Lentes Terminados Progresivos') && <td className="px-3 py-2 text-[#ccc]">{item.adicion || '—'}</td>}
                                   <td className="px-3 py-2 text-right font-bold whitespace-nowrap" style={{ color: group.style.accentColor }}>{formatCurrency(item.precio_par)}</td>
                                   {currentUser?.role === 'admin' && (
                                     <td className="px-3 py-2">
