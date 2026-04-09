@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 
 // ==================== TYPES ====================
-type TabId = 'home' | 'formula' | 'pricing' | 'catalog' | 'soporte';
+type TabId = 'home' | 'formula' | 'pricing' | 'catalog' | 'proveedores' | 'soporte';
+type ProveedorSubTab = 'Reelens' | 'Cerlents';
 type SoporteSubTab = 'backup' | 'users' | 'database';
 
 interface CurrentUser {
@@ -67,6 +68,19 @@ interface SettingItem {
   id: string;
   name: string;
   profit_margin: number;
+  created_at: string;
+}
+
+interface ProviderLens {
+  id: number;
+  provider: string;
+  categoria: string;
+  material: string;
+  tipo_lente: string | null;
+  esferas: string | null;
+  cilindro: string | null;
+  adicion: string | null;
+  precio_par: number;
   created_at: string;
 }
 
@@ -158,6 +172,18 @@ export default function Page() {
   const [providerForm, setProviderForm] = useState({ name: '', contact: '', phone: '' });
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
+  // Proveedores - Provider Lens
+  const [providerLensData, setProviderLensData] = useState<ProviderLens[]>([]);
+  const [proveedorSubTab, setProveedorSubTab] = useState<ProveedorSubTab>('Reelens');
+  const [editingLensRow, setEditingLensRow] = useState<ProviderLens | null>(null);
+  const [lensEditForm, setLensEditForm] = useState({
+    material: '', tipo_lente: '', esferas: '', cilindro: '', adicion: '', precio_par: 0,
+  });
+  const [showAddLensForm, setShowAddLensForm] = useState(false);
+  const [addLensForm, setAddLensForm] = useState({
+    categoria: '', material: '', tipo_lente: '', esferas: '', cilindro: '', adicion: '', precio_par: 0,
+  });
+
   // Admin - Lens prices (adaptado al esquema real)
   const [showLensForm, setShowLensForm] = useState(false);
   const [lensForm, setLensForm] = useState({
@@ -199,6 +225,16 @@ export default function Page() {
       const res = await fetch('/api/providers');
       if (res.ok) setProviders(await res.json());
     } catch { /* ignore */ }
+  }, []);
+
+  const fetchProviderLens = useCallback(async (provider: string = 'Reelens') => {
+    try {
+      const res = await fetch(`/api/provider-lens?provider=${provider}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProviderLensData(Array.isArray(data) ? data : []);
+      }
+    } catch { setProviderLensData([]); }
   }, []);
 
   const fetchLensPrices = useCallback(async () => {
@@ -339,6 +375,7 @@ export default function Page() {
     fetchProviders();
     fetchLensPrices();
     fetchSettings();
+    fetchProviderLens('Reelens');
     initDatabase();
   }, []);
 
@@ -551,6 +588,76 @@ export default function Page() {
       const res = await fetch(`/api/providers?id=${id}`, { method: 'DELETE' });
       if (res.ok) { showToast('Proveedor eliminado'); fetchProviders(); fetchLensPrices(); }
     } catch { /* ignore */ }
+  };
+
+  // ==================== PROVIDER LENS CRUD ====================
+  const startEditLensRow = (item: ProviderLens) => {
+    setEditingLensRow(item);
+    setLensEditForm({
+      material: item.material,
+      tipo_lente: item.tipo_lente || '',
+      esferas: item.esferas || '',
+      cilindro: item.cilindro || '',
+      adicion: item.adicion || '',
+      precio_par: item.precio_par,
+    });
+  };
+
+  const saveLensRow = async () => {
+    if (!editingLensRow) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/provider-lens', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingLensRow.id, ...lensEditForm }),
+      });
+      if (res.ok) {
+        showToast('Lente actualizado');
+        setEditingLensRow(null);
+        fetchProviderLens(proveedorSubTab);
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Error al actualizar', 'error');
+      }
+    } catch { showToast('Error de conexión', 'error'); }
+    setLoading(false);
+  };
+
+  const deleteLensRow = async (id: number) => {
+    if (!confirm('¿Eliminar este lente?')) return;
+    try {
+      const res = await fetch(`/api/provider-lens?id=${id}`, { method: 'DELETE' });
+      if (res.ok) { showToast('Lente eliminado'); fetchProviderLens(proveedorSubTab); }
+    } catch { showToast('Error al eliminar', 'error'); }
+  };
+
+  const addNewLens = async () => {
+    if (!addLensForm.categoria || !addLensForm.material) {
+      showToast('Categoría y material son requeridos', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/provider-lens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: proveedorSubTab,
+          ...addLensForm,
+        }),
+      });
+      if (res.ok) {
+        showToast('Lente creado');
+        setShowAddLensForm(false);
+        setAddLensForm({ categoria: '', material: '', tipo_lente: '', esferas: '', cilindro: '', adicion: '', precio_par: 0 });
+        fetchProviderLens(proveedorSubTab);
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Error al crear', 'error');
+      }
+    } catch { showToast('Error de conexión', 'error'); }
+    setLoading(false);
   };
 
   // ==================== LENS PRICE CRUD (adaptado al esquema real) ====================
@@ -923,13 +1030,14 @@ export default function Page() {
     { id: 'formula', label: 'Fórmula', icon: <Eye size={20} /> },
     { id: 'pricing', label: 'Cotizar', icon: <DollarSign size={20} /> },
     { id: 'catalog', label: 'Catálogo', icon: <Package size={20} /> },
+    { id: 'proveedores', label: 'Proveedores', icon: <Building2 size={20} /> },
     { id: 'soporte', label: 'Soporte', icon: <Settings size={20} /> },
   ];
 
   const tabs = currentUser
     ? (currentUser.role === 'admin'
       ? allTabs
-      : allTabs.filter((t) => ['home', 'formula', 'catalog'].includes(t.id)))
+      : allTabs.filter((t) => ['home', 'formula', 'catalog', 'proveedores'].includes(t.id)))
     : allTabs.filter((t) => ['home', 'formula', 'catalog'].includes(t.id));
 
   // ==================== RENDER ====================
@@ -1553,6 +1661,217 @@ export default function Page() {
                   </div>
                 );
               })()}
+            </motion.div>
+          )}
+
+          {/* ==================== PROVEEDORES ==================== */}
+          {activeTab === 'proveedores' && (
+            <motion.div key="proveedores" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2"><Building2 size={20} className="text-[#D4AF37]" /> Proveedores — Lentes</h2>
+
+              {/* Proveedor Sub-tabs: Reelens / Cerlents */}
+              <div className="flex gap-2">
+                {(['Reelens', 'Cerlents'] as const).map((tab) => (
+                  <button key={tab} onClick={() => { setProveedorSubTab(tab); fetchProviderLens(tab); setEditingLensRow(null); setShowAddLensForm(false); }}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                      proveedorSubTab === tab
+                        ? 'bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)]'
+                        : 'bg-[#111] text-[#888] border border-[#1a1a1a] hover:border-[#333]'
+                    }`}>
+                    <Glasses size={16} />
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-4 gap-2">
+                {(() => {
+                  const cats = providerLensData.reduce<Record<string, number>>((acc, r) => { acc[r.categoria] = (acc[r.categoria] || 0) + 1; return acc; }, {});
+                  const catColors: Record<string, { bg: string; label: string }> = {
+                    'Lentes Terminados': { bg: 'bg-yellow-500/20 border-yellow-600/30', label: '🟡 Terminados' },
+                    'Blue Vision Sencilla': { bg: 'bg-sky-500/20 border-sky-600/30', label: '🔵 Blue Vision' },
+                    'Bifocales': { bg: 'bg-green-500/20 border-green-600/30', label: '🟢 Bifocales' },
+                    'Talla Convencional': { bg: 'bg-blue-800/30 border-blue-700/30', label: '🔷 Convencional' },
+                  };
+                  return Object.entries(catColors).map(([cat, { bg, label }]) => (
+                    <div key={cat} className={`rounded-lg p-2.5 text-center border ${bg}`}>
+                      <p className="text-lg font-bold text-white">{cats[cat] || 0}</p>
+                      <p className="text-[10px] text-[#aaa]">{label}</p>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              {/* Agregar nuevo lente (admin) */}
+              {currentUser?.role === 'admin' && (
+                <div className="space-y-3">
+                  {!showAddLensForm ? (
+                    <button onClick={() => setShowAddLensForm(true)} className="w-full py-2.5 rounded-lg text-sm font-medium bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 hover:bg-[#D4AF37]/20 transition-all flex items-center justify-center gap-2">
+                      <Plus size={16} /> Agregar Lente
+                    </button>
+                  ) : (
+                    <div className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-white">Nuevo Lente — {proveedorSubTab}</h3>
+                        <button onClick={() => { setShowAddLensForm(false); setAddLensForm({ categoria: '', material: '', tipo_lente: '', esferas: '', cilindro: '', adicion: '', precio_par: 0 }); }} className="text-[#888] hover:text-white"><X size={18} /></button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <select className="premium-input text-xs" value={addLensForm.categoria} onChange={(e) => setAddLensForm({ ...addLensForm, categoria: e.target.value })}>
+                          <option value="">Categoría</option>
+                          <option value="Lentes Terminados">Lentes Terminados</option>
+                          <option value="Blue Vision Sencilla">Blue Vision Sencilla</option>
+                          <option value="Bifocales">Bifocales</option>
+                          <option value="Talla Convencional">Talla Convencional</option>
+                        </select>
+                        <input className="premium-input text-xs" placeholder="Material" value={addLensForm.material} onChange={(e) => setAddLensForm({ ...addLensForm, material: e.target.value })} />
+                        <input className="premium-input text-xs" placeholder="Tipo lente (opcional)" value={addLensForm.tipo_lente} onChange={(e) => setAddLensForm({ ...addLensForm, tipo_lente: e.target.value })} />
+                        <input className="premium-input text-xs" placeholder="Esferas" value={addLensForm.esferas} onChange={(e) => setAddLensForm({ ...addLensForm, esferas: e.target.value })} />
+                        <input className="premium-input text-xs" placeholder="Cilindro" value={addLensForm.cilindro} onChange={(e) => setAddLensForm({ ...addLensForm, cilindro: e.target.value })} />
+                        <input className="premium-input text-xs" placeholder="Adición" value={addLensForm.adicion} onChange={(e) => setAddLensForm({ ...addLensForm, adicion: e.target.value })} />
+                        <input className="premium-input text-xs" type="number" placeholder="Precio par ($)" value={addLensForm.precio_par || ''} onChange={(e) => setAddLensForm({ ...addLensForm, precio_par: Number(e.target.value) })} />
+                      </div>
+                      <button onClick={addNewLens} disabled={loading} className="w-full btn-gold flex items-center justify-center gap-2 text-sm">
+                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Crear Lente
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tablas coloreadas por categoría */}
+              {providerLensData.length === 0 ? (
+                <div className="text-center py-12 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                  <Glasses size={40} className="text-[#333] mx-auto mb-3" />
+                  <p className="text-sm text-[#666]">No hay lentes para {proveedorSubTab}</p>
+                  <p className="text-xs text-[#444] mt-1">Agrega lentes usando el botón de arriba</p>
+                </div>
+              ) : (
+                (() => {
+                  const categoryOrder = ['Lentes Terminados', 'Blue Vision Sencilla', 'Bifocales', 'Talla Convencional'];
+                  const categoryStyles: Record<string, { headerBg: string; headerText: string; rowBg: string; borderColor: string; accentColor: string }> = {
+                    'Lentes Terminados': { headerBg: 'background: rgba(234,179,8,0.15)', headerText: 'color: #EAB308', rowBg: 'background: rgba(234,179,8,0.05)', borderColor: 'border-color: rgba(234,179,8,0.2)', accentColor: '#EAB308' },
+                    'Blue Vision Sencilla': { headerBg: 'background: rgba(56,189,248,0.12)', headerText: 'color: #38BDF8', rowBg: 'background: rgba(56,189,248,0.04)', borderColor: 'border-color: rgba(56,189,248,0.2)', accentColor: '#38BDF8' },
+                    'Bifocales': { headerBg: 'background: rgba(34,197,94,0.12)', headerText: 'color: #22C55E', rowBg: 'background: rgba(34,197,94,0.04)', borderColor: 'border-color: rgba(34,197,94,0.2)', accentColor: '#22C55E' },
+                    'Talla Convencional': { headerBg: 'background: rgba(59,130,246,0.15)', headerText: 'color: #60A5FA', rowBg: 'background: rgba(59,130,246,0.04)', borderColor: 'border-color: rgba(59,130,246,0.2)', accentColor: '#60A5FA' },
+                  };
+                  const grouped = categoryOrder.map(cat => ({
+                    name: cat,
+                    items: providerLensData.filter(r => r.categoria === cat),
+                    style: categoryStyles[cat],
+                  })).filter(g => g.items.length > 0);
+
+                  return grouped.map(group => (
+                    <div key={group.name} className="rounded-xl overflow-hidden" style={{ border: group.style.borderColor, borderWidth: '1px' }}>
+                      {/* Header de categoría */}
+                      <div className="px-4 py-2.5 flex items-center justify-between" style={Object.fromEntries(group.style.headerBg.split(', ').map(p => p.split(': ')))}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full" style={{ background: group.style.accentColor }} />
+                          <h3 className="text-sm font-bold" style={{ color: group.style.accentColor }}>{group.name}</h3>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: `${group.style.accentColor}20`, color: group.style.accentColor }}>{group.items.length} lentes</span>
+                      </div>
+
+                      {/* Tabla */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-[#888] border-b" style={{ borderBottomColor: `${group.style.accentColor}15` }}>
+                              <th className="text-left px-3 py-2 font-medium">#</th>
+                              <th className="text-left px-3 py-2 font-medium">Material</th>
+                              {(group.name === 'Talla Convencional') && <th className="text-left px-3 py-2 font-medium">Tipo Lente</th>}
+                              <th className="text-left px-3 py-2 font-medium">Esferas</th>
+                              <th className="text-left px-3 py-2 font-medium">Cilindro</th>
+                              {(group.name === 'Bifocales') && <th className="text-left px-3 py-2 font-medium">Adición</th>}
+                              <th className="text-right px-3 py-2 font-medium">Precio Par</th>
+                              {currentUser?.role === 'admin' && <th className="text-center px-3 py-2 font-medium">Acciones</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.items.map((item, idx) => (
+                              <tr key={item.id} className="transition-colors hover:brightness-125" style={idx % 2 === 0 ? Object.fromEntries(group.style.rowBg.split(', ').map(p => p.split(': '))) : undefined}>
+                                <td className="px-3 py-2 text-[#666]">{idx + 1}</td>
+                                <td className="px-3 py-2 text-white font-medium">{item.material}</td>
+                                {(group.name === 'Talla Convencional') && <td className="px-3 py-2 text-[#ccc]">{item.tipo_lente || '—'}</td>}
+                                <td className="px-3 py-2 text-[#ccc]">{item.esferas || '—'}</td>
+                                <td className="px-3 py-2 text-[#ccc]">{item.cilindro || '—'}</td>
+                                {(group.name === 'Bifocales') && <td className="px-3 py-2 text-[#ccc]">{item.adicion || '—'}</td>}
+                                <td className="px-3 py-2 text-right font-bold" style={{ color: group.style.accentColor }}>{formatCurrency(item.precio_par)}</td>
+                                {currentUser?.role === 'admin' && (
+                                  <td className="px-3 py-2">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button onClick={() => startEditLensRow(item)} className="p-1.5 rounded-md hover:bg-white/10 transition-colors" title="Editar">
+                                        <Edit3 size={13} className="text-[#D4AF37]" />
+                                      </button>
+                                      <button onClick={() => deleteLensRow(item.id)} className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors" title="Eliminar">
+                                        <Trash2 size={13} className="text-red-400" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ));
+                })()
+              )}
+
+              {/* Modal de edición (admin) */}
+              <AnimatePresence>
+                {editingLensRow && currentUser?.role === 'admin' && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: 'rgba(0,0,0,0.85)' }} onClick={() => setEditingLensRow(null)}>
+                    <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} onClick={(e) => e.stopPropagation()}
+                      className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-white">Editar Lente</h3>
+                          <p className="text-xs text-[#888]">{editingLensRow.categoria} — {editingLensRow.material}</p>
+                        </div>
+                        <button onClick={() => setEditingLensRow(null)} className="p-1 rounded-lg hover:bg-white/10"><X size={18} className="text-[#888]" /></button>
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="text-xs text-[#666] mb-1 block">Material</label>
+                          <input className="premium-input text-sm w-full" value={lensEditForm.material} onChange={(e) => setLensEditForm({ ...lensEditForm, material: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-[#666] mb-1 block">Tipo Lente</label>
+                          <input className="premium-input text-sm w-full" value={lensEditForm.tipo_lente} onChange={(e) => setLensEditForm({ ...lensEditForm, tipo_lente: e.target.value })} placeholder="Opcional" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-[#666] mb-1 block">Esferas</label>
+                            <input className="premium-input text-sm w-full" value={lensEditForm.esferas} onChange={(e) => setLensEditForm({ ...lensEditForm, esferas: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#666] mb-1 block">Cilindro</label>
+                            <input className="premium-input text-sm w-full" value={lensEditForm.cilindro} onChange={(e) => setLensEditForm({ ...lensEditForm, cilindro: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-[#666] mb-1 block">Adición</label>
+                            <input className="premium-input text-sm w-full" value={lensEditForm.adicion} onChange={(e) => setLensEditForm({ ...lensEditForm, adicion: e.target.value })} placeholder="Ej: +1.00/+3.00" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#666] mb-1 block">Precio Par (COP)</label>
+                            <input className="premium-input text-sm w-full" type="number" value={lensEditForm.precio_par || ''} onChange={(e) => setLensEditForm({ ...lensEditForm, precio_par: Number(e.target.value) })} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingLensRow(null)} className="flex-1 py-2.5 rounded-lg text-sm text-[#888] bg-[#1a1a1a] hover:bg-[#222] transition-colors">Cancelar</button>
+                        <button onClick={saveLensRow} disabled={loading} className="flex-1 btn-gold flex items-center justify-center gap-2 text-sm">
+                          {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Guardar
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 
