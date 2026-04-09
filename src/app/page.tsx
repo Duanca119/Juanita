@@ -120,7 +120,9 @@ export default function Page() {
 
   // Formula
   const [formulaImage, setFormulaImage] = useState<string | null>(null);
+  const [formulaMode, setFormulaMode] = useState<'none' | 'photo' | 'gallery' | 'manual'>('none');
   const [analyzing, setAnalyzing] = useState(false);
+  const [showFormulaFields, setShowFormulaFields] = useState(false);
   const [prescription, setPrescription] = useState<Prescription>({
     od: { sph: '', cyl: '', axis: '' },
     oi: { sph: '', cyl: '', axis: '' },
@@ -345,7 +347,21 @@ export default function Page() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setFormulaImage(reader.result as string);
+    reader.onload = () => {
+      setFormulaImage(reader.result as string);
+      setFormulaMode('photo');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormulaImage(reader.result as string);
+      setFormulaMode('gallery');
+    };
     reader.readAsDataURL(file);
   };
 
@@ -362,6 +378,7 @@ export default function Page() {
       if (res.ok) {
         setPrescription(data.prescription);
         setRecommendations(data.recommendations || []);
+        setShowFormulaFields(true);
         showToast('Fórmula analizada correctamente');
       } else {
         showToast(data.error || 'Error al analizar', 'error');
@@ -1078,50 +1095,81 @@ export default function Page() {
               <div className="text-center mb-2">
                 <Sparkles size={32} className="text-[#D4AF37] mx-auto mb-2" />
                 <h2 className="text-lg font-bold text-white">Analizador de Fórmulas</h2>
-                <p className="text-xs text-[#666]">Sube una imagen de la fórmula óptica</p>
+                <p className="text-xs text-[#666]">Captura, elige de galería o ingresa manualmente</p>
               </div>
 
-              <label className="upload-area block">
-                {formulaImage ? (
-                  <div className="relative">
-                    <img src={formulaImage} alt="Fórmula" className="max-h-64 mx-auto rounded-lg" />
-                    <button onClick={(e) => { e.preventDefault(); setFormulaImage(null); setPrescription({ od: { sph: '', cyl: '', axis: '' }, oi: { sph: '', cyl: '', axis: '' }, add: '' }); setRecommendations([]); }} className="absolute top-2 right-2 p-1 rounded-full bg-black/70 text-white"><X size={16} /></button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Camera size={40} className="text-[#444] mx-auto" />
-                    <p className="text-sm text-[#666]">Toca para capturar o seleccionar imagen</p>
-                  </div>
-                )}
-                <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
-              </label>
+              {/* Botones de acción: 3 opciones */}
+              {!formulaImage && !showFormulaFields && (
+                <div className="grid grid-cols-3 gap-3">
+                  <button onClick={() => document.getElementById('camera-input')?.click()} className="flex flex-col items-center gap-2 p-4 rounded-xl card-hover text-center" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                    <Camera size={24} className="text-[#D4AF37]" />
+                    <span className="text-xs text-white font-medium">Tomar Foto</span>
+                  </button>
+                  <button onClick={() => document.getElementById('gallery-input')?.click()} className="flex flex-col items-center gap-2 p-4 rounded-xl card-hover text-center" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                    <Upload size={24} className="text-[#D4AF37]" />
+                    <span className="text-xs text-white font-medium">Galería</span>
+                  </button>
+                  <button onClick={() => { setShowFormulaFields(true); setFormulaMode('manual'); }} className="flex flex-col items-center gap-2 p-4 rounded-xl card-hover text-center" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                    <FileText size={24} className="text-[#D4AF37]" />
+                    <span className="text-xs text-white font-medium">Manual</span>
+                  </button>
+                </div>
+              )}
 
+              {/* Inputs ocultos */}
+              <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" id="camera-input" />
+              <input type="file" accept="image/*" onChange={handleGalleryUpload} className="hidden" id="gallery-input" />
+
+              {/* Imagen cargada */}
               {formulaImage && (
-                <button onClick={analyzePrescription} disabled={analyzing} className="w-full btn-gold flex items-center justify-center gap-2">
-                  {analyzing ? <Loader2 size={16} className="animate-spin" /> : <EyeIcon size={16} />}
-                  {analyzing ? 'Analizando con IA...' : 'Analizar Fórmula'}
+                <div className="relative">
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1a1a1a' }}>
+                    <img src={formulaImage} alt="Fórmula" className="max-h-64 mx-auto rounded-xl" />
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => { setFormulaImage(null); setFormulaMode('none'); setPrescription({ od: { sph: '', cyl: '', axis: '' }, oi: { sph: '', cyl: '', axis: '' }, add: '' }); setRecommendations([]); setShowFormulaFields(false); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm text-red-400" style={{ background: '#111', border: '1px solid #2a1a1a' }}>
+                      <X size={16} /> Quitar
+                    </button>
+                    <button onClick={analyzePrescription} disabled={analyzing} className="flex-1 btn-gold flex items-center justify-center gap-2">
+                      {analyzing ? <Loader2 size={16} className="animate-spin" /> : <EyeIcon size={16} />}
+                      {analyzing ? 'Analizando...' : 'Analizar con IA'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Botón para volver a elegir después de ver campos */}
+              {showFormulaFields && !formulaImage && (
+                <button onClick={() => { setShowFormulaFields(false); setFormulaMode('none'); setPrescription({ od: { sph: '', cyl: '', axis: '' }, oi: { sph: '', cyl: '', axis: '' }, add: '' }); setRecommendations([]); }} className="text-xs text-[#555] hover:text-[#888] transition-colors">
+                  ← Volver a elegir método
                 </button>
               )}
 
-              {(prescription.od.sph || prescription.oi.sph) && (
+              {/* Formulario de fórmula - visible siempre que showFormulaFields o haya datos */}
+              {showFormulaFields && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-                  <h3 className="text-sm font-semibold text-[#D4AF37] uppercase tracking-wider">Datos Extraídos</h3>
+                  <h3 className="text-sm font-semibold text-[#D4AF37] uppercase tracking-wider">
+                    {formulaMode === 'manual' ? '📋 Ingresar Fórmula' : '✨ Datos Extraídos'}
+                  </h3>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { label: 'OD (Ojo Derecho)', data: prescription.od },
-                      { label: 'OI (Ojo Izquierdo)', data: prescription.oi },
+                      { label: 'OD (Ojo Derecho)', data: prescription.od, eye: 'od' },
+                      { label: 'OI (Ojo Izquierdo)', data: prescription.oi, eye: 'oi' },
                     ].map((eye) => (
                       <div key={eye.label} className="rounded-xl p-3 space-y-2" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
                         <p className="text-xs font-bold text-[#D4AF37] text-center">{eye.label}</p>
-                        {(['sph', 'cyl', 'axis'] as const).map((f) => (
-                          <div key={f}>
-                            <label className="text-[10px] text-[#666] uppercase">{f}</label>
-                            <input className="premium-input text-sm" value={eye.data[f]} onChange={(e) => {
-                              const isOd = eye.label.includes('OD');
-                              setPrescription((p) => isOd
-                                ? { ...p, od: { ...p.od, [f]: e.target.value } }
-                                : { ...p, oi: { ...p.oi, [f]: e.target.value } });
-                            }} />
+                        {[
+                          { key: 'sph', label: 'SPH (Esfera)', placeholder: 'Ej: -2.50' },
+                          { key: 'cyl', label: 'CYL (Cilindro)', placeholder: 'Ej: -1.00' },
+                          { key: 'axis', label: 'AXIS (Eje)', placeholder: 'Ej: 180' },
+                        ].map((f) => (
+                          <div key={f.key}>
+                            <label className="text-[10px] text-[#666] uppercase">{f.label}</label>
+                            <input className="premium-input text-sm" value={eye.data[f.key as keyof typeof eye.data]} onChange={(e) => {
+                              setPrescription((p) => eye.eye === 'od'
+                                ? { ...p, od: { ...p.od, [f.key]: e.target.value } }
+                                : { ...p, oi: { ...p.oi, [f.key]: e.target.value } });
+                            }} placeholder={f.placeholder} />
                           </div>
                         ))}
                       </div>
@@ -1131,6 +1179,11 @@ export default function Page() {
                     <label className="text-xs text-[#666] uppercase">ADD (Adición)</label>
                     <input className="premium-input text-sm mt-1" value={prescription.add} onChange={(e) => setPrescription((p) => ({ ...p, add: e.target.value }))} placeholder="Ej: +2.50" />
                   </div>
+
+                  {/* Botón limpiar formulario manual */}
+                  <button onClick={() => { setPrescription({ od: { sph: '', cyl: '', axis: '' }, oi: { sph: '', cyl: '', axis: '' }, add: '' }); setRecommendations([]); }} className="w-full py-2.5 rounded-xl text-xs text-[#888] hover:text-white transition-colors" style={{ background: '#0a0a0a', border: '1px solid #1a1a1a' }}>
+                    Limpiar Fórmula
+                  </button>
 
                   {recommendations.length > 0 && (
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-xl p-4 gold-glow" style={{ background: 'linear-gradient(135deg, #1a1505 0%, #111 100%)', border: '1px solid rgba(212,175,55,0.3)' }}>
