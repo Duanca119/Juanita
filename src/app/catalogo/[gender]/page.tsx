@@ -86,7 +86,8 @@ export default function CatalogoPublico() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#000' }}>
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <img src="/logo.png" alt="Juanita Pelaez Visión" className="w-20 h-20 rounded-full object-cover border-2 border-[#D4AF37] mx-auto mb-4 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-[#666] text-sm">Cargando catálogo...</p>
         </div>
       </div>
@@ -97,9 +98,12 @@ export default function CatalogoPublico() {
     <div className="min-h-screen" style={{ background: '#000', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {/* Header */}
       <header className="sticky top-0 z-40 px-4 py-3" style={{ background: 'rgba(0,0,0,0.95)', borderBottom: '1px solid #1a1a1a', backdropFilter: 'blur(10px)' }}>
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-lg font-bold" style={{ color: '#D4AF37' }}>Juanita Pelaez Visión</h1>
-          <p className="text-[10px] tracking-widest uppercase" style={{ color: '#A0A0A0' }}>Catálogo de Monturas</p>
+        <div className="max-w-4xl mx-auto flex items-center gap-3">
+          <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-full object-cover border-2 border-[#D4AF37]" />
+          <div>
+            <h1 className="text-lg font-bold" style={{ color: '#D4AF37' }}>Juanita Pelaez Visión</h1>
+            <p className="text-[10px] tracking-widest uppercase" style={{ color: '#A0A0A0' }}>Catálogo de Monturas</p>
+          </div>
         </div>
       </header>
 
@@ -247,6 +251,7 @@ export default function CatalogoPublico() {
 
       {/* Footer */}
       <footer className="text-center py-6 mt-8" style={{ borderTop: '1px solid #1a1a1a' }}>
+        <img src="/logo.png" alt="Juanita Pelaez Visión" className="w-12 h-12 rounded-full object-cover border-2 border-[#D4AF37] mx-auto mb-2" />
         <p className="text-xs font-bold" style={{ color: '#D4AF37' }}>Juanita Pelaez Visión</p>
         <p className="text-[10px] mt-1" style={{ color: '#444' }}>Catálogo generado automáticamente</p>
       </footer>
