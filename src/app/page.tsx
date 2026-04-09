@@ -99,6 +99,9 @@ export default function Page() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
 
+  // Update notification
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+
   // Data
   const [products, setProducts] = useState<Product[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -293,6 +296,19 @@ export default function Page() {
     setShowLogin(true);
     showToast('Sesión cerrada');
   };
+
+  // Escuchar mensajes del Service Worker sobre nueva versión
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'NEW_VERSION') {
+          setShowUpdateBanner(true);
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+      return () => navigator.serviceWorker.removeEventListener('message', handleMessage);
+    }
+  }, []);
 
   // Check localStorage on mount
   useEffect(() => {
@@ -975,6 +991,31 @@ export default function Page() {
           </button>
         </div>
       </header>
+
+      {/* Banner de actualización */}
+      <AnimatePresence>
+        {showUpdateBanner && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 py-2 flex items-center justify-between" style={{ background: 'linear-gradient(90deg, #D4AF37, #b8962e)' }}>
+              <div className="flex items-center gap-2">
+                <RefreshCw size={14} className="text-black" />
+                <span className="text-xs font-semibold text-black">Nueva versión disponible</span>
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="text-xs font-bold text-black bg-white/30 px-3 py-1 rounded-full hover:bg-white/50 transition-colors"
+              >
+                Actualizar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-20 px-4 pt-4">
