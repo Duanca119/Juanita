@@ -1777,13 +1777,13 @@ export default function Page() {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="text-[#888] border-b" style={{ borderBottomColor: `${group.style.accentColor}15` }}>
-                              <th className="text-left px-3 py-2 font-medium">#</th>
-                              <th className="text-left px-3 py-2 font-medium">Material</th>
-                              {(group.name === 'Talla Convencional') && <th className="text-left px-3 py-2 font-medium">Tipo Lente</th>}
+                              <th className="text-left px-3 py-2 font-medium w-6">#</th>
+                              <th className="text-left px-3 py-2 font-medium" style={{ minWidth: '140px' }}>Material</th>
+                              <th className="text-left px-3 py-2 font-medium">Tipo Lente</th>
                               <th className="text-left px-3 py-2 font-medium">Esferas</th>
                               <th className="text-left px-3 py-2 font-medium">Cilindro</th>
-                              {(group.name === 'Bifocales') && <th className="text-left px-3 py-2 font-medium">Adición</th>}
-                              <th className="text-right px-3 py-2 font-medium">Precio Par</th>
+                              <th className="text-left px-3 py-2 font-medium">Adición</th>
+                              <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Precio Par</th>
                               {currentUser?.role === 'admin' && <th className="text-center px-3 py-2 font-medium">Acciones</th>}
                             </tr>
                           </thead>
@@ -1791,12 +1791,12 @@ export default function Page() {
                             {group.items.map((item, idx) => (
                               <tr key={item.id} className="transition-colors hover:brightness-125" style={idx % 2 === 0 ? Object.fromEntries(group.style.rowBg.split(', ').map(p => p.split(': '))) : undefined}>
                                 <td className="px-3 py-2 text-[#666]">{idx + 1}</td>
-                                <td className="px-3 py-2 text-white font-medium">{item.material}</td>
-                                {(group.name === 'Talla Convencional') && <td className="px-3 py-2 text-[#ccc]">{item.tipo_lente || '—'}</td>}
+                                <td className="px-3 py-2 text-white font-medium whitespace-nowrap">{item.material}</td>
+                                <td className="px-3 py-2 text-[#ccc]">{item.tipo_lente || '—'}</td>
                                 <td className="px-3 py-2 text-[#ccc]">{item.esferas || '—'}</td>
                                 <td className="px-3 py-2 text-[#ccc]">{item.cilindro || '—'}</td>
-                                {(group.name === 'Bifocales') && <td className="px-3 py-2 text-[#ccc]">{item.adicion || '—'}</td>}
-                                <td className="px-3 py-2 text-right font-bold" style={{ color: group.style.accentColor }}>{formatCurrency(item.precio_par)}</td>
+                                <td className="px-3 py-2 text-[#ccc]">{item.adicion || '—'}</td>
+                                <td className="px-3 py-2 text-right font-bold whitespace-nowrap" style={{ color: group.style.accentColor }}>{formatCurrency(item.precio_par)}</td>
                                 {currentUser?.role === 'admin' && (
                                   <td className="px-3 py-2">
                                     <div className="flex items-center justify-center gap-1">
