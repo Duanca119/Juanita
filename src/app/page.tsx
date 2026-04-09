@@ -84,6 +84,25 @@ interface ProviderLens {
   created_at: string;
 }
 
+interface CerlensPrice {
+  id: number;
+  grupo: string;
+  material: string;
+  prog_prime: number | null;
+  prog_ventrix: number | null;
+  prog_advance: number | null;
+  prog_confort: number | null;
+  prog_practice_20: number | null;
+  prog_practice: number | null;
+  bif_invisible: number | null;
+  bif_bfree: number | null;
+  ocu_ocupacional: number | null;
+  mono_simple: number | null;
+  mono_relax: number | null;
+  mono_kids: number | null;
+  created_at: string;
+}
+
 // ==================== HELPERS ====================
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
@@ -97,6 +116,102 @@ const statusBadge = (status: string) => {
   };
   return map[status] || '';
 };
+
+// ==================== CERLENS EDIT FORM ====================
+function CerlensEditForm({ item, onSave, onClose, formatCurrency }: {
+  item: CerlensPrice;
+  onSave: (id: number, field: keyof CerlensPrice, value: number | null) => Promise<void>;
+  onClose: () => void;
+  formatCurrency: (n: number) => string;
+}) {
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const priceFields: { key: keyof CerlensPrice; label: string; group: string }[] = [
+    { key: 'prog_prime', label: 'Prime Max', group: 'PROGRESIVOS' },
+    { key: 'prog_ventrix', label: 'Ventrix Max', group: 'PROGRESIVOS' },
+    { key: 'prog_advance', label: 'Advance Max', group: 'PROGRESIVOS' },
+    { key: 'prog_confort', label: 'Confort Max', group: 'PROGRESIVOS' },
+    { key: 'prog_practice_20', label: 'Practice 2.0', group: 'PROGRESIVOS' },
+    { key: 'prog_practice', label: 'Practice', group: 'PROGRESIVOS' },
+    { key: 'bif_invisible', label: 'Invisible', group: 'BIFOCALES' },
+    { key: 'bif_bfree', label: 'B-Free', group: 'BIFOCALES' },
+    { key: 'ocu_ocupacional', label: 'Ocupacional', group: 'OCUPACIONAL' },
+    { key: 'mono_simple', label: 'Simple', group: 'MONOFOCALES' },
+    { key: 'mono_relax', label: 'Relax', group: 'MONOFOCALES' },
+    { key: 'mono_kids', label: 'Kids', group: 'MONOFOCALES' },
+  ];
+
+  const groupColors: Record<string, string> = { 'PROGRESIVOS': '#F59E0B', 'BIFOCALES': '#22C55E', 'OCUPACIONAL': '#8B5CF6', 'MONOFOCALES': '#3B82F6' };
+  const groups = [...new Set(priceFields.map(f => f.group))];
+
+  const handleChange = (key: string, value: string) => {
+    setEditValues(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSave = async (key: keyof CerlensPrice) => {
+    const raw = editValues[key];
+    const numVal = raw === '' || raw === '-' ? null : Number(raw.replace(/[^0-9]/g, ''));
+    setSaving(key);
+    await onSave(item.id, key, numVal);
+    setSaving(null);
+    setEditValues(prev => { const n = { ...prev }; delete n[key as string]; return n; });
+  };
+
+  return (
+    <div className="space-y-3">
+      {groups.map(group => {
+        const fields = priceFields.filter(f => f.group === group);
+        const gColor = groupColors[group];
+        return (
+          <div key={group}>
+            <p className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: gColor }}>{group}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {fields.map(f => {
+                const val = f.key in editValues ? editValues[f.key] : (item[f.key] !== null ? String(item[f.key]) : '');
+                const isEditing = f.key in editValues;
+                return (
+                  <div key={f.key} className="rounded-lg p-2" style={{ background: '#0a0a0a', border: `1px solid ${gColor}15` }}>
+                    <label className="text-[10px] text-[#666] mb-1 block">{f.label}</label>
+                    {isEditing ? (
+                      <div className="flex gap-1">
+                        <input
+                          className="premium-input text-xs flex-1"
+                          type="number"
+                          value={val}
+                          onChange={(e) => handleChange(f.key, e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSave(f.key)}
+                          autoFocus
+                        />
+                        <button onClick={() => handleSave(f.key)} className="p-1 rounded bg-green-600/20 hover:bg-green-600/30" title="Guardar">
+                          <Check size={12} className="text-green-400" />
+                        </button>
+                        <button onClick={() => handleChange(f.key, '')} className="p-1 rounded bg-red-600/20 hover:bg-red-600/30" title="Vaciar">
+                          <X size={12} className="text-red-400" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleChange(f.key, val)}
+                        className="text-xs font-bold text-left cursor-pointer hover:underline py-0.5"
+                        style={{ color: val ? gColor : '#333' }}
+                      >
+                        {val ? formatCurrency(Number(val)) : '— (vacío)'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      <button onClick={onClose} className="w-full py-2 rounded-lg text-sm text-[#888] bg-[#1a1a1a] hover:bg-[#222] transition-colors mt-2">
+        Cerrar
+      </button>
+    </div>
+  );
+}
 
 // ==================== MAIN APP ====================
 export default function Page() {
@@ -184,6 +299,10 @@ export default function Page() {
     categoria: '', material: '', tipo_lente: '', esferas: '', cilindro: '', adicion: '', precio_par: 0,
   });
 
+  // Proveedores - Cerlens
+  const [cerlensData, setCerlensData] = useState<CerlensPrice[]>([]);
+  const [editingCerlens, setEditingCerlens] = useState<CerlensPrice | null>(null);
+
   // Admin - Lens prices (adaptado al esquema real)
   const [showLensForm, setShowLensForm] = useState(false);
   const [lensForm, setLensForm] = useState({
@@ -235,6 +354,16 @@ export default function Page() {
         setProviderLensData(Array.isArray(data) ? data : []);
       }
     } catch { setProviderLensData([]); }
+  }, []);
+
+  const fetchCerlensData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cerlens-prices');
+      if (res.ok) {
+        const data = await res.json();
+        setCerlensData(Array.isArray(data) ? data : []);
+      }
+    } catch { setCerlensData([]); }
   }, []);
 
   const fetchLensPrices = useCallback(async () => {
@@ -376,6 +505,7 @@ export default function Page() {
     fetchLensPrices();
     fetchSettings();
     fetchProviderLens('Reelens');
+    fetchCerlensData();
     initDatabase();
   }, []);
 
@@ -658,6 +788,29 @@ export default function Page() {
       }
     } catch { showToast('Error de conexión', 'error'); }
     setLoading(false);
+  };
+
+  // ==================== CERLENS CRUD ====================
+  const saveCerlensCell = async (id: number, field: keyof CerlensPrice, value: number | null) => {
+    try {
+      const res = await fetch('/api/cerlens-prices', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, [field]: value }),
+      });
+      if (res.ok) {
+        setCerlensData(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+        showToast('Precio actualizado');
+      }
+    } catch { showToast('Error al actualizar', 'error'); }
+  };
+
+  const deleteCerlensRow = async (id: number) => {
+    if (!confirm('¿Eliminar esta fila?')) return;
+    try {
+      const res = await fetch(`/api/cerlens-prices?id=${id}`, { method: 'DELETE' });
+      if (res.ok) { showToast('Fila eliminada'); fetchCerlensData(); }
+    } catch { showToast('Error al eliminar', 'error'); }
   };
 
   // ==================== LENS PRICE CRUD (adaptado al esquema real) ====================
@@ -1944,6 +2097,161 @@ export default function Page() {
               </AnimatePresence>
             </motion.div>
           )}
+
+              {/* ============ TAB CERLENS ============ */}
+              {proveedorSubTab === 'Cerlents' && (
+                <div className="space-y-4">
+                  {/* Stats por grupo */}
+                  <div className="grid grid-cols-4 gap-2">
+                    {(() => {
+                      const grupos = cerlensData.reduce<Record<string, number>>((acc, r) => { acc[r.grupo] = (acc[r.grupo] || 0) + 1; return acc; }, {});
+                      const gStyles: Record<string, { bg: string; label: string }> = {
+                        'Lentes Claros': { bg: 'bg-amber-500/20 border-amber-600/30', label: '🟡 Claros' },
+                        'Lentes Fotosensibles': { bg: 'bg-orange-500/20 border-orange-600/30', label: '🟠 Fotosensibles' },
+                        'Lentes Mirror': { bg: 'bg-pink-500/20 border-pink-600/30', label: '🩷 Mirror' },
+                        'Lentes Polarizados': { bg: 'bg-cyan-500/20 border-cyan-600/30', label: '🩵 Polarizados' },
+                      };
+                      return Object.entries(gStyles).map(([g, { bg, label }]) => (
+                        <div key={g} className={`rounded-lg p-2.5 text-center border ${bg}`}>
+                          <p className="text-lg font-bold text-white">{grupos[g] || 0}</p>
+                          <p className="text-[10px] text-[#aaa]">{label}</p>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+
+                  {/* Tabla Cerlents pivotada por grupo */}
+                  {cerlensData.length === 0 ? (
+                    <div className="text-center py-12 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                      <Glasses size={40} className="text-[#333] mx-auto mb-3" />
+                      <p className="text-sm text-[#666]">No hay datos de Cerlents</p>
+                    </div>
+                  ) : (
+                    (() => {
+                      const grupoOrder = ['Lentes Claros', 'Lentes Fotosensibles', 'Lentes Mirror', 'Lentes Polarizados'];
+                      const grupoColors: Record<string, string> = {
+                        'Lentes Claros': '#F59E0B',
+                        'Lentes Fotosensibles': '#F97316',
+                        'Lentes Mirror': '#EC4899',
+                        'Lentes Polarizados': '#06B6D4',
+                      };
+
+                      // Column definitions: [key, label, span, group]
+                      const colGroups = [
+                        { name: 'PROGRESIVOS', cols: [
+                          ['prog_prime', 'Prime Max'], ['prog_ventrix', 'Ventrix Max'], ['prog_advance', 'Advance Max'],
+                          ['prog_confort', 'Confort Max'], ['prog_practice_20', 'Practice 2.0'], ['prog_practice', 'Practice'],
+                        ]},
+                        { name: 'BIFOCALES', cols: [['bif_invisible', 'Invisible'], ['bif_bfree', 'B-Free']] },
+                        { name: 'OCUPACIONAL', cols: [['ocu_ocupacional', 'Ocupacional']] },
+                        { name: 'MONOFOCALES', cols: [['mono_simple', 'Simple'], ['mono_relax', 'Relax'], ['mono_kids', 'Kids']] },
+                      ];
+
+                      return grupoOrder.map(grupo => {
+                        const items = cerlensData.filter(r => r.grupo === grupo);
+                        if (!items.length) return null;
+                        const color = grupoColors[grupo] || '#888';
+
+                        return (
+                          <div key={grupo} className="rounded-xl overflow-hidden" style={{ border: `${color}30`, borderWidth: '1px' }}>
+                            {/* Header grupo */}
+                            <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: `${color}15` }}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+                                <h3 className="text-sm font-bold" style={{ color: color }}>{grupo}</h3>
+                              </div>
+                              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: `${color}20`, color }}>{items.length} materiales</span>
+                            </div>
+
+                            {/* Tabla */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-[10px]">
+                                <thead>
+                                  {/* Row 1: Group headers */}
+                                  <tr>
+                                    <th rowSpan={2} className="text-left px-2 py-1.5 font-medium text-[#888] sticky left-0 bg-[#0a0a0a] z-10" style={{ minWidth: '120px' }}>Material</th>
+                                    {colGroups.map(g => (
+                                      <th key={g.name} colSpan={g.cols.length} className="text-center px-1 py-1.5 font-bold text-[11px] uppercase tracking-wider" style={{ color, borderBottom: `2px solid ${color}40` }}>
+                                        {g.name}
+                                      </th>
+                                    ))}
+                                    {currentUser?.role === 'admin' && <th rowSpan={2} className="px-1 py-1.5" />}
+                                  </tr>
+                                  {/* Row 2: Sub-column headers */}
+                                  <tr className="text-[#666]">
+                                    {colGroups.map(g => g.cols.map(([key, label]) => (
+                                      <th key={key} className="text-center px-1 py-1 font-medium whitespace-nowrap" style={{ color: `${color}99`, borderBottom: `${color}15` }}>
+                                        {label}
+                                      </th>
+                                    )))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {items.map((item, idx) => (
+                                    <tr key={item.id} className="transition-colors hover:brightness-125" style={idx % 2 === 0 ? { background: `${color}05` } : undefined}>
+                                      <td className="px-2 py-1.5 text-white font-medium whitespace-nowrap sticky left-0 z-10" style={{ background: idx % 2 === 0 ? '#0f0f0f' : '#0a0a0a' }}>
+                                        {item.material}
+                                      </td>
+                                      {colGroups.map(g => g.cols.map(([key]) => {
+                                        const val = item[key] as number | null;
+                                        const isNull = val === null || val === undefined;
+                                        return (
+                                          <td key={key} className="text-center px-1 py-1.5 whitespace-nowrap relative group/col">
+                                            {isNull ? (
+                                              <span className="text-[#333]">—</span>
+                                            ) : currentUser?.role === 'admin' ? (
+                                              <button
+                                                onClick={() => setEditingCerlens(item)}
+                                                className="font-bold cursor-pointer hover:underline"
+                                                style={{ color }}
+                                                title="Click para editar"
+                                              >
+                                                {formatCurrency(val)}
+                                              </button>
+                                            ) : (
+                                              <span className="font-bold" style={{ color }}>{formatCurrency(val)}</span>
+                                            )}
+                                          </td>
+                                        );
+                                      }))}
+                                      {currentUser?.role === 'admin' && (
+                                        <td className="px-1 py-1.5">
+                                          <button onClick={() => deleteCerlensRow(item.id)} className="p-1 rounded hover:bg-red-500/10" title="Eliminar">
+                                            <Trash2 size={11} className="text-red-400/60 hover:text-red-400" />
+                                          </button>
+                                        </td>
+                                      )}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()
+                  )}
+
+                  {/* Modal edición Cerlens (admin) */}
+                  <AnimatePresence>
+                    {editingCerlens && currentUser?.role === 'admin' && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: 'rgba(0,0,0,0.85)' }} onClick={() => setEditingCerlens(null)}>
+                        <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} onClick={(e) => e.stopPropagation()}
+                          className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="text-sm font-bold text-white">Editar Precios</h3>
+                              <p className="text-xs text-[#888]">{editingCerlens.grupo} — {editingCerlens.material}</p>
+                            </div>
+                            <button onClick={() => setEditingCerlens(null)} className="p-1 rounded-lg hover:bg-white/10"><X size={18} className="text-[#888]" /></button>
+                          </div>
+                          <CerlensEditForm item={editingCerlens} onSave={saveCerlensCell} onClose={() => setEditingCerlens(null)} formatCurrency={formatCurrency} />
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
 
           {/* ==================== SOPORTE ==================== */}
           {activeTab === 'soporte' && (
