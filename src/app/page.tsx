@@ -1894,6 +1894,8 @@ export default function Page() {
                 </div>
               )}
 
+              {proveedorSubTab === 'Reelens' && (
+              <>
               {/* Tablas coloreadas por categoría */}
               {providerLensData.length === 0 ? (
                 <div className="text-center py-12 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
@@ -2095,8 +2097,8 @@ export default function Page() {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </motion.div>
-          )}
+              </>
+              )}
 
               {/* ============ TAB CERLENS ============ */}
               {proveedorSubTab === 'Cerlents' && (
@@ -2252,6 +2254,8 @@ export default function Page() {
                   </AnimatePresence>
                 </div>
               )}
+            </motion.div>
+          )}
 
           {/* ==================== SOPORTE ==================== */}
           {activeTab === 'soporte' && (
