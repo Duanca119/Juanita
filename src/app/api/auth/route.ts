@@ -16,13 +16,30 @@ export async function POST(request: NextRequest) {
       .eq('password', password)
       .single();
 
-    if (error || !data) {
-      return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
+    if (error) {
+      // Si la tabla no existe, el error dice "does not exist"
+      if (error.message?.includes('does not exist') || error.code === '42P01') {
+        return NextResponse.json(
+          { error: 'La tabla users no existe. Ejecuta el SQL en Supabase primero.' },
+          { status: 500 }
+        );
+      }
+      // Si no encuentra el usuario
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Email o contraseña incorrectos' }, { status: 401 });
+      }
+      console.error('Auth error:', error);
+      return NextResponse.json({ error: 'Email o contraseña incorrectos' }, { status: 401 });
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: 'Email o contraseña incorrectos' }, { status: 401 });
     }
 
     return NextResponse.json({ user: data });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error desconocido';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('Auth catch:', message);
+    return NextResponse.json({ error: 'Error de conexión: ' + message }, { status: 500 });
   }
 }

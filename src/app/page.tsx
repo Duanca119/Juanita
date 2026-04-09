@@ -97,6 +97,7 @@ export default function Page() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // Data
   const [products, setProducts] = useState<Product[]>([]);
@@ -234,9 +235,23 @@ export default function Page() {
   }, [fetchSettings, showToast]);
 
   // ==================== AUTH ====================
+  // Limpiar cache del Service Worker para forzar actualización
+  const clearCacheAndReload = async () => {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.unregister();
+    }
+    window.location.reload();
+  };
+
   const handleLogin = async () => {
+    setLoginError('');
     if (!loginEmail || !loginPassword) {
-      showToast('Email y contraseña son requeridos', 'error');
+      setLoginError('Escribe tu email y contraseña');
       return;
     }
     setLoginLoading(true);
@@ -246,21 +261,28 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        setLoginError('No se pudo conectar al servidor. Intenta limpiar cache.');
+        setLoginLoading(false);
+        return;
+      }
       if (res.ok) {
         setCurrentUser(data.user);
         localStorage.setItem('jp_user', JSON.stringify(data.user));
         setShowLogin(false);
         setLoginEmail('');
         setLoginPassword('');
+        setLoginError('');
         showToast(`Bienvenido, ${data.user.name}`);
-        // Set default tab based on role
         setActiveTab(data.user.role === 'admin' ? 'home' : 'catalog');
       } else {
-        showToast(data.error || 'Error al iniciar sesión', 'error');
+        setLoginError(data.error || 'Error al iniciar sesión');
       }
-    } catch {
-      showToast('Error de conexión', 'error');
+    } catch (err) {
+      setLoginError('Error de conexión. Verifica tu internet.');
     }
     setLoginLoading(false);
   };
@@ -906,6 +928,11 @@ export default function Page() {
                   <label className="text-xs text-[#666] uppercase mb-1 block">Contraseña</label>
                   <input type="password" className="premium-input text-sm" placeholder="Tu contraseña" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
                 </div>
+                {loginError && (
+                  <div className="p-3 rounded-lg bg-red-950/50 border border-red-800/50 text-xs text-red-300">
+                    {loginError}
+                  </div>
+                )}
                 {loginLoading ? (
                   <div className="flex items-center justify-center gap-2 py-3"><Loader2 size={18} className="animate-spin text-[#D4AF37]" /><span className="text-sm text-[#888]">Ingresando...</span></div>
                 ) : (
@@ -913,6 +940,9 @@ export default function Page() {
                     Iniciar Sesión
                   </button>
                 )}
+                <button onClick={clearCacheAndReload} className="w-full text-xs text-[#555] hover:text-[#888] py-1 transition-colors">
+                  Problemas? Limpiar cache y recargar
+                </button>
               </div>
             </motion.div>
           </motion.div>
