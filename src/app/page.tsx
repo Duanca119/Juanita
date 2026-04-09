@@ -1772,48 +1772,115 @@ export default function Page() {
                         <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: `${group.style.accentColor}20`, color: group.style.accentColor }}>{group.items.length} lentes</span>
                       </div>
 
-                      {/* Tabla */}
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-[#888] border-b" style={{ borderBottomColor: `${group.style.accentColor}15` }}>
-                              <th className="text-left px-3 py-2 font-medium w-6">#</th>
-                              <th className="text-left px-3 py-2 font-medium" style={{ minWidth: '140px' }}>Material</th>
-                              {(group.name === 'Talla Convencional') && <th className="text-left px-3 py-2 font-medium">Tipo Lente</th>}
-                              <th className="text-left px-3 py-2 font-medium">Esferas</th>
-                              {!(group.name === 'Bifocales') && <th className="text-left px-3 py-2 font-medium">Cilindro</th>}
-                              {(group.name === 'Bifocales' || group.name === 'Talla Convencional') && <th className="text-left px-3 py-2 font-medium">Adición</th>}
-                              <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Precio Par</th>
-                              {currentUser?.role === 'admin' && <th className="text-center px-3 py-2 font-medium">Acciones</th>}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.items.map((item, idx) => (
-                              <tr key={item.id} className="transition-colors hover:brightness-125" style={idx % 2 === 0 ? Object.fromEntries(group.style.rowBg.split(', ').map(p => p.split(': '))) : undefined}>
-                                <td className="px-3 py-2 text-[#666]">{idx + 1}</td>
-                                <td className="px-3 py-2 text-white font-medium whitespace-nowrap">{item.material}</td>
-                                {(group.name === 'Talla Convencional') && <td className="px-3 py-2 text-[#ccc]">{item.tipo_lente || '—'}</td>}
-                                <td className="px-3 py-2 text-[#ccc]">{item.esferas || '—'}</td>
-                                {!(group.name === 'Bifocales') && <td className="px-3 py-2 text-[#ccc]">{item.cilindro || '—'}</td>}
-                                {(group.name === 'Bifocales' || group.name === 'Talla Convencional') && <td className="px-3 py-2 text-[#ccc]">{item.adicion || '—'}</td>}
-                                <td className="px-3 py-2 text-right font-bold whitespace-nowrap" style={{ color: group.style.accentColor }}>{formatCurrency(item.precio_par)}</td>
-                                {currentUser?.role === 'admin' && (
-                                  <td className="px-3 py-2">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <button onClick={() => startEditLensRow(item)} className="p-1.5 rounded-md hover:bg-white/10 transition-colors" title="Editar">
-                                        <Edit3 size={13} className="text-[#D4AF37]" />
-                                      </button>
-                                      <button onClick={() => deleteLensRow(item.id)} className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors" title="Eliminar">
-                                        <Trash2 size={13} className="text-red-400" />
-                                      </button>
-                                    </div>
-                                  </td>
-                                )}
+                      {/* Talla Convencional: tabla pivotada por material */}
+                      {group.name === 'Talla Convencional' ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-[#888] border-b" style={{ borderBottomColor: `${group.style.accentColor}20` }}>
+                                <th className="text-left px-3 py-2 font-medium" style={{ minWidth: '130px' }}>Material</th>
+                                <th className="text-right px-3 py-2 font-medium" colSpan={2}>Visión Sencilla</th>
+                                <th className="text-center px-1 py-2 font-medium" colSpan={2} style={{ borderBottom: `2px solid ${group.style.accentColor}40` }}>Bifocal</th>
+                                <th className="text-right px-3 py-2 font-medium">Progresivo</th>
+                                {currentUser?.role === 'admin' && <th className="text-center px-2 py-2 font-medium">Acciones</th>}
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                              <tr className="text-[10px] text-[#666] border-b" style={{ borderBottomColor: `${group.style.accentColor}10` }}>
+                                <th />
+                                <th className="px-3 py-1" />
+                                <th className="px-1 py-1" />
+                                <th className="px-3 py-1 font-medium" style={{ color: group.style.accentColor }}>Invisible</th>
+                                <th className="px-3 py-1 font-medium" style={{ color: group.style.accentColor }}>Flat Top</th>
+                                <th className="px-3 py-1" />
+                                {currentUser?.role === 'admin' && <th />}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(() => {
+                                const materials = [...new Set(group.items.map(r => r.material))];
+                                return materials.map((mat, idx) => {
+                                  const rows = group.items.filter(r => r.material === mat);
+                                  const vs = rows.find(r => r.tipo_lente === 'Vision Sencilla');
+                                  const bi = rows.find(r => r.tipo_lente === 'Bifocal Invisible');
+                                  const bf = rows.find(r => r.tipo_lente === 'Bifocal Flat Top');
+                                  const pr = rows.find(r => r.tipo_lente === 'Progresivo');
+                                  return (
+                                    <tr key={mat} className="transition-colors hover:brightness-125" style={idx % 2 === 0 ? Object.fromEntries(group.style.rowBg.split(', ').map(p => p.split(': '))) : undefined}>
+                                      <td className="px-3 py-2.5 text-white font-medium whitespace-nowrap">{mat}</td>
+                                      <td className="px-3 py-2.5 text-right font-bold whitespace-nowrap" style={{ color: group.style.accentColor }}>{vs ? formatCurrency(vs.precio_par) : '—'}</td>
+                                      <td className="px-1 py-2.5">
+                                        {currentUser?.role === 'admin' && vs ? (
+                                          <button onClick={() => startEditLensRow(vs)} className="p-1 rounded hover:bg-white/10" title="Editar V.Sencilla"><Edit3 size={10} className="text-[#D4AF37]/60" /></button>
+                                        ) : null}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-center whitespace-nowrap" style={{ background: `${group.style.accentColor}06` }}>
+                                        <span className="text-white font-semibold">{bi ? formatCurrency(bi.precio_par) : '—'}</span>
+                                        {currentUser?.role === 'admin' && bi && (
+                                          <button onClick={() => startEditLensRow(bi)} className="p-0.5 ml-1 rounded hover:bg-white/10" title="Editar Invisible"><Edit3 size={9} className="text-[#D4AF37]/50" /></button>
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-center whitespace-nowrap" style={{ background: `${group.style.accentColor}06` }}>
+                                        <span className="text-white font-semibold">{bf ? formatCurrency(bf.precio_par) : '—'}</span>
+                                        {currentUser?.role === 'admin' && bf && (
+                                          <button onClick={() => startEditLensRow(bf)} className="p-0.5 ml-1 rounded hover:bg-white/10" title="Editar Flat Top"><Edit3 size={9} className="text-[#D4AF37]/50" /></button>
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right font-bold whitespace-nowrap" style={{ color: group.style.accentColor }}>{pr ? formatCurrency(pr.precio_par) : '—'}</td>
+                                      {currentUser?.role === 'admin' && (
+                                        <td className="px-2 py-2.5">
+                                          {pr ? (
+                                            <button onClick={() => startEditLensRow(pr)} className="p-1 rounded hover:bg-white/10" title="Editar Progresivo"><Edit3 size={10} className="text-[#D4AF37]/60" /></button>
+                                          ) : null}
+                                        </td>
+                                      )}
+                                    </tr>
+                                  );
+                                });
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        /* Tablas normales: Lentes Terminados, Blue Vision, Bifocales */
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-[#888] border-b" style={{ borderBottomColor: `${group.style.accentColor}15` }}>
+                                <th className="text-left px-3 py-2 font-medium w-6">#</th>
+                                <th className="text-left px-3 py-2 font-medium" style={{ minWidth: '140px' }}>Material</th>
+                                <th className="text-left px-3 py-2 font-medium">Esferas</th>
+                                {!(group.name === 'Bifocales') && <th className="text-left px-3 py-2 font-medium">Cilindro</th>}
+                                {(group.name === 'Bifocales') && <th className="text-left px-3 py-2 font-medium">Adición</th>}
+                                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Precio Par</th>
+                                {currentUser?.role === 'admin' && <th className="text-center px-3 py-2 font-medium">Acciones</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.items.map((item, idx) => (
+                                <tr key={item.id} className="transition-colors hover:brightness-125" style={idx % 2 === 0 ? Object.fromEntries(group.style.rowBg.split(', ').map(p => p.split(': '))) : undefined}>
+                                  <td className="px-3 py-2 text-[#666]">{idx + 1}</td>
+                                  <td className="px-3 py-2 text-white font-medium whitespace-nowrap">{item.material}</td>
+                                  <td className="px-3 py-2 text-[#ccc]">{item.esferas || '—'}</td>
+                                  {!(group.name === 'Bifocales') && <td className="px-3 py-2 text-[#ccc]">{item.cilindro || '—'}</td>}
+                                  {(group.name === 'Bifocales') && <td className="px-3 py-2 text-[#ccc]">{item.adicion || '—'}</td>}
+                                  <td className="px-3 py-2 text-right font-bold whitespace-nowrap" style={{ color: group.style.accentColor }}>{formatCurrency(item.precio_par)}</td>
+                                  {currentUser?.role === 'admin' && (
+                                    <td className="px-3 py-2">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <button onClick={() => startEditLensRow(item)} className="p-1.5 rounded-md hover:bg-white/10 transition-colors" title="Editar">
+                                          <Edit3 size={13} className="text-[#D4AF37]" />
+                                        </button>
+                                        <button onClick={() => deleteLensRow(item.id)} className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors" title="Eliminar">
+                                          <Trash2 size={13} className="text-red-400" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   ));
                 })()
