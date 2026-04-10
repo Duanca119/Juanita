@@ -1527,8 +1527,12 @@ export default function Page() {
                   Math.abs(parseFloat(prescription.od.cyl) || 0),
                   Math.abs(parseFloat(prescription.oi.cyl) || 0)
                 );
-                // Determinar cuáles proveedores aplican (extra rango: esfera -6.00/-4.00, cilindro -2.25/-4.00)
-                const canCerlents = hasAdd || maxAbsSph >= 4 || maxAbsCyl >= 2.25;
+                // Rango normal: esfera -4.00/+4.00, cilindro N/-2.00
+                // Extra rango: esfera >= ±4.00, cilindro >= ±2.25
+                const isExtraRange = maxAbsSph >= 4 || maxAbsCyl >= 2.25;
+                // Cerlents siempre aplica (monofocal disponible para cualquier fórmula)
+                const canCerlents = true;
+                // Reelens aplica sin ADD o con ADD <= 3
                 const canReelens = !hasAdd || addVal <= 3;
                 const bothApply = canCerlents && canReelens;
                 // Proveedor activo: si solo uno aplica ir directo, si ambos esperar selección
@@ -1621,6 +1625,10 @@ export default function Page() {
                 const gruposDisponibles = [...new Set(cerlensData.map(r => r.grupo))];
                 const cerlFilas = cotGrupo ? cerlensData.filter(r => r.grupo === cotGrupo) : [];
                 const cerlCols = cotTipoLente ? (tipoLenteCols[cotTipoLente] || []) : [];
+                // Sin ADD solo mostrar Monofocal en Cerlents
+                const cerlensTipos = hasAdd
+                  ? ['progresivo', 'bifocal', 'ocupacional', 'monofocal'] as const
+                  : ['monofocal'] as const;
 
                 // === REELENS ===
                 const reelensData = providerLensData.filter(r => r.provider === 'Reelens');
@@ -1700,7 +1708,7 @@ export default function Page() {
                           <div>
                             <p className="text-sm font-bold" style={{ color: useCerlents ? '#A855F7' : '#60A5FA' }}>{useCerlents ? 'Talla Digital — Cerlents' : 'Convencional — Reelens'}</p>
                             <p className="text-[10px] text-[#888]">{useCerlents
-                              ? (hasAdd ? 'Fórmula con adición · Cerlents' : 'Graduación alta (≥±3.00) · Cerlents')
+                              ? (hasAdd ? 'Fórmula con adición · Cerlents' : (isExtraRange ? 'Extra rango · Cerlents' : 'Monofocal · Cerlents'))
                               : 'Fórmula convencional · Reelens'}</p>
                           </div>
                         </div>
@@ -1721,10 +1729,9 @@ export default function Page() {
                             <label className="text-xs text-[#666] uppercase mb-1.5 block">Tipo de Lente</label>
                             <select value={cotTipoLente} onChange={e => { setCotTipoLente(e.target.value as any); setSelectedCotizacion(null); }} className={selectClass} style={selectStyle}>
                               <option value="">Seleccionar...</option>
-                              <option value="progresivo">Progresivo</option>
-                              <option value="bifocal">Bifocal</option>
-                              <option value="ocupacional">Ocupacional</option>
-                              <option value="monofocal">Monofocal</option>
+                              {cerlensTipos.map(t => (
+                                <option key={t} value={t}>{tipoLenteLabels[t]}</option>
+                              ))}
                             </select>
                           </div>
                           <div>
