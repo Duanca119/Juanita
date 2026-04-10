@@ -267,7 +267,7 @@ export default function Page() {
 
   // Cotización - nuevo flujo basado en fórmula
   const [addSubType, setAddSubType] = useState<'progresivo' | 'bifocal'>('progresivo');
-  const [cotizacionFilters, setCotizacionFilters] = useState({ blueBlock: false, photochromic: false, polarized: false });
+  const [cotizacionFilters, setCotizacionFilters] = useState({ blueBlock: false, verde: false, photochromic: false, polarized: false });
   const [selectedCotizacion, setSelectedCotizacion] = useState<{ material: string; type: string; price: number; provider: string } | null>(null);
 
   // Catalog
@@ -1521,11 +1521,21 @@ export default function Page() {
                 };
                 const config = typeConfig[detectedType];
 
-                // Toggle filtro (solo uno a la vez)
+                // Toggle filtro: Blue y Verde mutuamente excluyentes; Foto/Polar como complemento
                 const toggleFilter = (filter: keyof typeof cotizacionFilters) => {
                   setCotizacionFilters(prev => {
-                    const isOn = prev[filter];
-                    return { blueBlock: false, photochromic: false, polarized: false, [filter]: !isOn };
+                    if (filter === 'blueBlock' || filter === 'verde') {
+                      // Blue y Verde se excluyen; al cambiar se apagan Foto y Polar
+                      const isBlue = filter === 'blueBlock' ? !prev.blueBlock : false;
+                      const isVerde = filter === 'verde' ? !prev.verde : false;
+                      return { blueBlock: isBlue, verde: isVerde, photochromic: false, polarized: false };
+                    }
+                    // Foto/Polar solo se pueden activar si Blue o Verde están activos
+                    if (!prev.blueBlock && !prev.verde) return prev;
+                    if (filter === 'photochromic') {
+                      return { ...prev, photochromic: !prev.photochromic, polarized: false };
+                    }
+                    return { ...prev, polarized: !prev.polarized, photochromic: false };
                   });
                   setSelectedCotizacion(null);
                 };
@@ -1535,10 +1545,15 @@ export default function Page() {
 
                 if (detectedType === 'progresivo') {
                   // Cerlents - progresivos
+                  const isBlue = cotizacionFilters.blueBlock;
+                  const isVerde = cotizacionFilters.verde;
+                  const isFoto = cotizacionFilters.photochromic;
+                  const isPolar = cotizacionFilters.polarized;
+                  const hasBaseFilter = isBlue || isVerde;
+
                   let grupo = 'Lentes Claros';
-                  if (cotizacionFilters.photochromic) grupo = 'Lentes Fotosensibles';
-                  else if (cotizacionFilters.polarized) grupo = 'Lentes Polarizados';
-                  else if (cotizacionFilters.blueBlock) grupo = 'Lentes Claros'; // filtrar por nombre
+                  if (isFoto) grupo = 'Lentes Fotosensibles';
+                  else if (isPolar) grupo = 'Lentes Polarizados';
 
                   let items = cerlensData.filter(r => r.grupo === grupo);
 
@@ -1548,8 +1563,20 @@ export default function Page() {
                       r.material.includes('1.56') || r.material.includes('Poly') ||
                       r.material.includes('1.60') || r.material.includes('1.74')
                     );
-                    if (cotizacionFilters.blueBlock) {
-                      items = items.filter(r => r.material.toLowerCase().includes('blue'));
+                    if (hasBaseFilter) {
+                      // Blue y Verde toman los mismos materiales (bluedefend/blue)
+                      items = items.filter(r => r.material.toLowerCase().includes('blue') || r.material.toLowerCase().includes('bluedefend'));
+                    }
+                  } else if (grupo === 'Lentes Fotosensibles' && hasBaseFilter) {
+                    // Foto + Blue/Verde: bluedefend materials en Fotosensibles
+                    items = items.filter(r => r.material.toLowerCase().includes('blue') || r.material.toLowerCase().includes('bluedefend'));
+                  } else if (grupo === 'Lentes Polarizados' && hasBaseFilter) {
+                    // Polar + Blue/Verde: filtrar por keyword (puede que no haya resultados)
+                    const keywords = [];
+                    if (isBlue) keywords.push('blue');
+                    if (isVerde) keywords.push('verde');
+                    if (keywords.length > 0) {
+                      items = items.filter(r => keywords.some(kw => r.material.toLowerCase().includes(kw)));
                     }
                   }
 
@@ -1569,9 +1596,16 @@ export default function Page() {
                   });
                 } else {
                   // Reelens
+                  const isBlue = cotizacionFilters.blueBlock;
+                  const isVerde = cotizacionFilters.verde;
+                  const isFoto = cotizacionFilters.photochromic;
+                  const isPolar = cotizacionFilters.polarized;
+                  const hasBaseFilter = isBlue || isVerde;
+
                   let categoria = '';
                   if (detectedType === 'terminado') {
-                    categoria = cotizacionFilters.blueBlock ? 'Blue Vision Sencilla' : 'Lentes Terminados';
+                    if (isBlue || isVerde) categoria = 'Blue Vision Sencilla';
+                    else categoria = 'Lentes Terminados';
                   } else if (detectedType === 'bifocal') {
                     categoria = 'Bifocales';
                   } else {
@@ -1585,9 +1619,18 @@ export default function Page() {
                     items = items.filter(r => r.tipo_lente === 'Vision Sencilla');
                   }
 
-                  // Blue block filter para Talla Convencional y Bifocales
-                  if (cotizacionFilters.blueBlock && (detectedType === 'talla_convencional' || detectedType === 'bifocal')) {
-                    items = items.filter(r => r.material.toLowerCase().includes('blue'));
+                  // Aplicar filtros de keyword combinados
+                  const keywords: string[] = [];
+                  if (isBlue) keywords.push('blue');
+                  if (isVerde) keywords.push('verde');
+                  if (isFoto) keywords.push('foto');
+                  if (isPolar) keywords.push('polariz');
+
+                  if (keywords.length > 0) {
+                    items = items.filter(r => {
+                      const matLower = r.material.toLowerCase();
+                      return keywords.every(kw => matLower.includes(kw));
+                    });
                   }
 
                   items.forEach(item => {
@@ -1630,10 +1673,11 @@ export default function Page() {
                       <div className="flex gap-2 flex-wrap">
                         {([
                           { key: 'blueBlock' as const, label: '🔵 Blue Block', active: cotizacionFilters.blueBlock },
-                          { key: 'photochromic' as const, label: '☀️ Fotocromático', active: cotizacionFilters.photochromic },
-                          { key: 'polarized' as const, label: '🕶️ Polarizado', active: cotizacionFilters.polarized },
+                          { key: 'verde' as const, label: '🟢 Verde', active: cotizacionFilters.verde },
+                          { key: 'photochromic' as const, label: '☀️ Fotocromático', active: cotizacionFilters.photochromic, disabled: !cotizacionFilters.blueBlock && !cotizacionFilters.verde },
+                          { key: 'polarized' as const, label: '🕶️ Polarizado', active: cotizacionFilters.polarized, disabled: !cotizacionFilters.blueBlock && !cotizacionFilters.verde },
                         ]).map(f => (
-                          <button key={f.key} onClick={() => toggleFilter(f.key)} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${f.active ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#111] text-[#888] border border-[#1a1a1a] hover:border-[#333]'}`}>
+                          <button key={f.key} onClick={() => toggleFilter(f.key)} disabled={f.disabled} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${f.disabled ? 'opacity-30 cursor-not-allowed bg-[#0a0a0a] text-[#444] border border-[#111]' : f.active ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#111] text-[#888] border border-[#1a1a1a] hover:border-[#333]'}`}>
                             {f.label}
                           </button>
                         ))}
@@ -1727,6 +1771,7 @@ export default function Page() {
                       <button onClick={() => {
                         const activeFilters = [];
                         if (cotizacionFilters.blueBlock) activeFilters.push('Blue Block');
+                        if (cotizacionFilters.verde) activeFilters.push('Verde');
                         if (cotizacionFilters.photochromic) activeFilters.push('Fotocromático');
                         if (cotizacionFilters.polarized) activeFilters.push('Polarizado');
                         const formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
