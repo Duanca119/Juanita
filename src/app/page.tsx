@@ -1529,21 +1529,29 @@ export default function Page() {
                 const useReelens = !useCerlents;
 
                 // === HELPERS DE RANGO ===
-                // Parsea rango tipo "N-2.00" → [0, 2], "-2.25/-4.00" → [2.25, 4], "N/+3.00" → [0, 3]
+                // Parsea rango tipo "N-2.00" → [0, 2], "-2.25/-4.00" → [2.25, 4], "-4.00/+4.00" → [0, 4]
                 const parseRange = (range: string | null): [number, number] => {
                   if (!range) return [0, 99];
                   const r = range.replace(/\s/g, '');
-                  // Formato "N-2.00" o "N/+3.00"
+                  // Formato "N-2.00" o "N/+3.00" → N = 0/neutro
                   if (r.startsWith('N')) {
                     const nums = r.replace('N', '').replace(/[\/\-]/g, ',').split(',').map(Number).filter(n => !isNaN(n));
-                    if (nums.length === 1) return [0, Math.abs(nums[0])];
-                    if (nums.length === 2) return [0, Math.abs(nums[1])];
+                    if (nums.length >= 1) return [0, Math.abs(nums[nums.length - 1])];
                     return [0, 99];
                   }
-                  // Formato "-4.00/+4.00" o "-2.25/-4.00"
-                  const nums = r.split(/[\/\-]/).map(s => parseFloat(s)).filter(n => !isNaN(n));
-                  if (nums.length >= 2) return [Math.min(Math.abs(nums[0]), Math.abs(nums[1])), Math.max(Math.abs(nums[0]), Math.abs(nums[1]))];
-                  if (nums.length === 1) return [0, Math.abs(nums[0])];
+                  // Formato "-4.00/+4.00" → separar por / primero
+                  const parts = r.split('/').map(s => parseFloat(s)).filter(n => !isNaN(n));
+                  if (parts.length >= 2) {
+                    const [a, b] = parts.map(Math.abs);
+                    // Si los signos originales son opuestos (-4/+4) → rango de 0 al máximo
+                    const rawParts = r.split('/').map(s => s.trim());
+                    const signA = rawParts[0].startsWith('-') ? -1 : 1;
+                    const signB = rawParts[1].startsWith('-') ? -1 : 1;
+                    if (signA !== signB) return [0, Math.max(a, b)];
+                    // Mismo signo (-2.25/-4.00) → rango entre los dos valores absolutos
+                    return [Math.min(a, b), Math.max(a, b)];
+                  }
+                  if (parts.length === 1) return [0, Math.abs(parts[0])];
                   return [0, 99];
                 };
 
