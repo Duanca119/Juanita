@@ -1632,11 +1632,13 @@ export default function Page() {
 
                 // === REELENS ===
                 const reelensData = providerLensData.filter(r => r.provider === 'Reelens');
-                // Si tiene ADD, solo mostrar categorías que tengan campo adición
+                // Categorías con campo adición
                 const categoriasConAdd = new Set(reelensData.filter(r => r.adicion).map(r => r.categoria));
+                // Talla Convencional siempre se muestra (tenga o no adición)
+                const siempreVisible = new Set(reelensData.filter(r => r.categoria === 'Talla Convencional').map(r => r.categoria));
                 const categoriasReelens = hasAdd
-                  ? [...new Set(reelensData.filter(r => categoriasConAdd.has(r.categoria)).map(r => r.categoria))]
-                  : [...new Set(reelensData.filter(r => !categoriasConAdd.has(r.categoria)).map(r => r.categoria))];
+                  ? [...new Set(reelensData.filter(r => categoriasConAdd.has(r.categoria) || siempreVisible.has(r.categoria)).map(r => r.categoria))]
+                  : [...new Set(reelensData.filter(r => !categoriasConAdd.has(r.categoria) || siempreVisible.has(r.categoria)).map(r => r.categoria))];
                 // Categorías que tienen materiales extra rango (Terminados y Blue Visión)
                 const categoriasConExtra = ['Lentes Terminados', 'Blue Vision Sencilla'];
                 // Filtrar materiales: si extra rango y es categoría con extra, solo mostrar "extra"
