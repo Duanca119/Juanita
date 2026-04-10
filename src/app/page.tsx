@@ -1638,7 +1638,7 @@ export default function Page() {
                   ? [...new Set(reelensData.filter(r => categoriasConAdd.has(r.categoria)).map(r => r.categoria))]
                   : [...new Set(reelensData.filter(r => !categoriasConAdd.has(r.categoria)).map(r => r.categoria))];
                 // Categorías que tienen materiales extra rango (Terminados y Blue Visión)
-                const categoriasConExtra = ['Lentes Terminados', 'Blue Visión Sencilla'];
+                const categoriasConExtra = ['Lentes Terminados', 'Blue Vision Sencilla'];
                 // Filtrar materiales: si extra rango y es categoría con extra, solo mostrar "extra"
                 const materialesFiltrados = cotCategoria
                   ? (() => {
