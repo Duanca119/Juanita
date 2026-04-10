@@ -265,6 +265,11 @@ export default function Page() {
   const [addAntireflective, setAddAntireflective] = useState(false);
   const [profitProfile, setProfitProfile] = useState<'Básico' | 'Estándar' | 'Premium'>('Estándar');
 
+  // Cotización - nuevo flujo basado en fórmula
+  const [addSubType, setAddSubType] = useState<'progresivo' | 'bifocal'>('progresivo');
+  const [cotizacionFilters, setCotizacionFilters] = useState({ blueBlock: false, photochromic: false, polarized: false });
+  const [selectedCotizacion, setSelectedCotizacion] = useState<{ material: string; type: string; price: number; provider: string } | null>(null);
+
   // Catalog
   const [genderFilter, setGenderFilter] = useState('todos');
   const [statusFilter, setStatusFilter] = useState('todos');
@@ -1490,97 +1495,250 @@ export default function Page() {
                 </div>
               )}
 
-              {/* Provider */}
-              <div>
-                <label className="text-xs text-[#666] uppercase mb-1 block">Proveedor</label>
-                <select className="premium-input" value={selectedProvider} onChange={(e) => { setSelectedProvider(e.target.value); setSelectedLens(null); setAddBlueFilter(false); setAddPhotochromic(false); setAddAntireflective(false); }}>
-                  <option value="">Seleccionar proveedor...</option>
-                  {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-
-              {/* Lens Type */}
-              <div>
-                <label className="text-xs text-[#666] uppercase mb-1 block">Tipo de Lente</label>
-                <select className="premium-input" value={selectedLens?.id || ''} onChange={(e) => {
-                  const lens = lensPrices.find((l) => l.id === e.target.value);
-                  setSelectedLens(lens || null);
-                  setAddBlueFilter(false); setAddPhotochromic(false); setAddAntireflective(false);
-                }} disabled={!selectedProvider}>
-                  <option value="">Seleccionar lente...</option>
-                  {lensPrices.filter((l) => l.provider_id === selectedProvider).map((l) => (
-                    <option key={l.id} value={l.id}>{l.lens_type} ({l.quality}) - {formatCurrency(l.base_price)}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Extras (adaptado al esquema real con precios individuales) */}
-              {selectedLens && (
-                <div className="space-y-2">
-                  <label className="text-xs text-[#666] uppercase mb-1 block">Recubrimientos y Extras</label>
-                  {[
-                    { label: 'Filtro Azul (Blue Filter)', price: selectedLens.blue_filter, checked: addBlueFilter, toggle: () => setAddBlueFilter(!addBlueFilter) },
-                    { label: 'Fotocromático', price: selectedLens.photochromic, checked: addPhotochromic, toggle: () => setAddPhotochromic(!addPhotochromic) },
-                    { label: 'Antirreflejo', price: selectedLens.antireflective, checked: addAntireflective, toggle: () => setAddAntireflective(!addAntireflective) },
-                  ].map((extra) => (
-                    <button key={extra.label} onClick={extra.toggle} className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${extra.checked ? 'border-[#D4AF37] bg-[#D4AF37]/5' : ''}`} style={{ background: '#111', border: `1px solid ${extra.checked ? '#D4AF37' : '#1a1a1a'}` }}>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${extra.checked ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-[#333]'}`}>
-                          {extra.checked && <Check size={12} className="text-black" />}
-                        </div>
-                        <span className="text-sm text-white">{extra.label}</span>
-                      </div>
-                      <span className={`text-sm font-medium ${extra.checked ? 'text-[#D4AF37]' : 'text-[#666]'}`}>+{formatCurrency(extra.price)}</span>
-                    </button>
-                  ))}
+              {/* No hay fórmula - pedir que vaya a Analizar */}
+              {!(prescription.od.sph || prescription.oi.sph) && (
+                <div className="text-center py-12 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                  <EyeIcon size={40} className="text-[#333] mx-auto mb-3" />
+                  <p className="text-sm text-[#666]">Primero analiza una fórmula del paciente</p>
+                  <button onClick={() => setActiveTab('formula')} className="mt-4 btn-gold text-sm px-4 py-2 flex items-center gap-2 mx-auto"><EyeIcon size={16} /> Ir a Analizar Fórmula</button>
                 </div>
               )}
 
-              {/* Profit Profile */}
-              <div>
-                <label className="text-xs text-[#666] uppercase mb-2 block">Perfil de Ganancia</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['Básico', 'Estándar', 'Premium'] as const).map((profile) => (
-                    <button key={profile} onClick={() => setProfitProfile(profile)} className={`p-3 rounded-xl text-center transition-all ${profitProfile === profile ? 'gold-glow' : ''}`} style={{ background: '#111', border: `1px solid ${profitProfile === profile ? '#D4AF37' : '#1a1a1a'}` }}>
-                      <p className="text-xs font-bold text-[#D4AF37]">{profile}</p>
-                      <p className="text-lg font-bold text-white">{Math.round(getMargin(profile))}%</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* ===== FLUJO DE COTIZACIÓN BASADO EN FÓRMULA ===== */}
+              {(prescription.od.sph || prescription.oi.sph) && (() => {
+                const hasAdd = !!(prescription.od.add || prescription.oi.add);
+                const maxCyl = Math.max(
+                  Math.abs(parseFloat(prescription.od.cyl) || 0),
+                  Math.abs(parseFloat(prescription.oi.cyl) || 0)
+                );
+                const detectedType = hasAdd ? addSubType : (maxCyl < 2 ? 'terminado' : 'talla_convencional');
 
-              {/* Price Breakdown */}
-              <div className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                <h3 className="text-sm font-semibold text-[#D4AF37] uppercase tracking-wider">Desglose de Precio</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-[#A0A0A0]">Precio base</span><span>{formatCurrency(pricingCalc.base)}</span></div>
-                  <div className="flex justify-between"><span className="text-[#A0A0A0]">Extras</span><span>{formatCurrency(pricingCalc.extrasTotal)}</span></div>
-                  <div className="flex justify-between"><span className="text-[#A0A0A0]">Subtotal (costo)</span><span className="text-white font-medium">{formatCurrency(pricingCalc.cost)}</span></div>
-                  <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen ({Math.round(pricingCalc.marginPct)}%)</span><span className="text-green-400">{formatCurrency(pricingCalc.margin)}</span></div>
-                  <div className="h-px bg-[#222]" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-[#D4AF37] font-bold">PRECIO FINAL</span>
-                    <span className="text-xl font-bold text-gold-gradient">{formatCurrency(pricingCalc.finalPrice)}</span>
-                  </div>
-                </div>
-              </div>
+                const typeConfig: Record<string, { label: string; color: string; provider: string; desc: string }> = {
+                  terminado: { label: 'Lente Terminado', color: '#EAB308', provider: 'Reelens', desc: 'Sin adición · Cilindro menor a -2.00' },
+                  talla_convencional: { label: 'Talla Convencional', color: '#60A5FA', provider: 'Reelens', desc: 'Sin adición · Cilindro mayor a -2.00' },
+                  progresivo: { label: 'Progresivo (Digital)', color: '#A855F7', provider: 'Cerlents', desc: 'Con adición · Talla Digital' },
+                  bifocal: { label: 'Bifocal', color: '#22C55E', provider: 'Reelens', desc: 'Con adición · Lente Bifocal' },
+                };
+                const config = typeConfig[detectedType];
 
-              {pricingCalc.finalPrice > 0 && (
-                <button onClick={() => {
-                  const extrasList = [];
-                  if (addBlueFilter) extrasList.push('Filtro Azul');
-                  if (addPhotochromic) extrasList.push('Fotocromático');
-                  if (addAntireflective) extrasList.push('Antirreflejo');
-                  let formulaText = '';
-                  if (prescription.od.sph || prescription.oi.sph) {
-                    formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
+                // Toggle filtro (solo uno a la vez)
+                const toggleFilter = (filter: keyof typeof cotizacionFilters) => {
+                  setCotizacionFilters(prev => {
+                    const isOn = prev[filter];
+                    return { blueBlock: false, photochromic: false, polarized: false, [filter]: !isOn };
+                  });
+                  setSelectedCotizacion(null);
+                };
+
+                // === OBTENER MATERIALES FILTRADOS ===
+                let materiales: { material: string; type: string; price: number; provider: string }[] = [];
+
+                if (detectedType === 'progresivo') {
+                  // Cerlents - progresivos
+                  let grupo = 'Lentes Claros';
+                  if (cotizacionFilters.photochromic) grupo = 'Lentes Fotosensibles';
+                  else if (cotizacionFilters.polarized) grupo = 'Lentes Polarizados';
+                  else if (cotizacionFilters.blueBlock) grupo = 'Lentes Claros'; // filtrar por nombre
+
+                  let items = cerlensData.filter(r => r.grupo === grupo);
+
+                  // Claros: solo materiales Digital (1.56, Poly, 1.60, 1.74)
+                  if (grupo === 'Lentes Claros') {
+                    items = items.filter(r =>
+                      r.material.includes('1.56') || r.material.includes('Poly') ||
+                      r.material.includes('1.60') || r.material.includes('1.74')
+                    );
+                    if (cotizacionFilters.blueBlock) {
+                      items = items.filter(r => r.material.toLowerCase().includes('blue'));
+                    }
                   }
-                  const text = `👓 Juanita Pelaez Visión\n\nCotización:\nLente: ${selectedLens?.lens_type} (${selectedLens?.quality})\nProveedor: ${providers.find(p => p.id === selectedProvider)?.name}\nExtras: ${extrasList.join(', ') || 'Ninguno'}\nCosto: ${formatCurrency(pricingCalc.cost)}\nMargen: ${Math.round(pricingCalc.marginPct)}%\n\n💰 PRECIO: ${formatCurrency(pricingCalc.finalPrice)}${formulaText}`;
-                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                }} className="w-full btn-gold flex items-center justify-center gap-2">
-                  <Send size={16} /> Compartir Cotización por WhatsApp
-                </button>
-              )}
+
+                  // Convertir a lista plana: cada material × cada tipo progresivo
+                  const progTypes: { key: keyof CerlensPrice; label: string }[] = [
+                    { key: 'prog_prime', label: 'Prime Max' }, { key: 'prog_ventrix', label: 'Ventrix Max' },
+                    { key: 'prog_advance', label: 'Advance Max' }, { key: 'prog_confort', label: 'Confort Max' },
+                    { key: 'prog_practice_20', label: 'Practice 2.0' }, { key: 'prog_practice', label: 'Practice' },
+                  ];
+                  items.forEach(item => {
+                    progTypes.forEach(pt => {
+                      const val = item[pt.key] as number | null;
+                      if (val !== null && val !== undefined) {
+                        materiales.push({ material: item.material, type: pt.label, price: val, provider: 'Cerlents' });
+                      }
+                    });
+                  });
+                } else {
+                  // Reelens
+                  let categoria = '';
+                  if (detectedType === 'terminado') {
+                    categoria = cotizacionFilters.blueBlock ? 'Blue Vision Sencilla' : 'Lentes Terminados';
+                  } else if (detectedType === 'bifocal') {
+                    categoria = 'Bifocales';
+                  } else {
+                    categoria = 'Talla Convencional';
+                  }
+
+                  let items = providerLensData.filter(r => r.provider === 'Reelens' && r.categoria === categoria);
+
+                  // Talla Convencional: solo Vision Sencilla
+                  if (detectedType === 'talla_convencional') {
+                    items = items.filter(r => r.tipo_lente === 'Vision Sencilla');
+                  }
+
+                  // Blue block filter para Talla Convencional y Bifocales
+                  if (cotizacionFilters.blueBlock && (detectedType === 'talla_convencional' || detectedType === 'bifocal')) {
+                    items = items.filter(r => r.material.toLowerCase().includes('blue'));
+                  }
+
+                  items.forEach(item => {
+                    materiales.push({ material: item.material, type: categoria, price: item.precio_par, provider: 'Reelens' });
+                  });
+                }
+
+                // Cálculo de precio con margen
+                const cotCost = selectedCotizacion?.price || 0;
+                const cotMarginPct = getMargin(profitProfile);
+                const cotMargin = cotCost * (cotMarginPct / 100);
+                const cotFinal = cotCost + cotMargin;
+
+                return (
+                  <>
+                    {/* === Tipo detectado === */}
+                    <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: `${config.color}10`, border: `1px solid ${config.color}30` }}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full" style={{ background: config.color }} />
+                        <div>
+                          <p className="text-sm font-bold" style={{ color: config.color }}>{config.label}</p>
+                          <p className="text-[10px] text-[#888]">{config.desc} · {config.provider}</p>
+                        </div>
+                      </div>
+                      {hasAdd && (
+                        <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${config.color}30` }}>
+                          {(['progresivo', 'bifocal'] as const).map(sub => (
+                            <button key={sub} onClick={() => { setAddSubType(sub); setSelectedCotizacion(null); }} className={`px-3 py-1.5 text-[10px] font-bold uppercase transition-all ${addSubType === sub ? '' : 'opacity-40'}`}
+                              style={{ background: addSubType === sub ? (sub === 'progresivo' ? '#A855F7' : '#22C55E') : 'transparent', color: addSubType === sub ? '#fff' : '#888' }}>
+                              {sub === 'progresivo' ? 'Progresivo' : 'Bifocal'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* === Filtros === */}
+                    <div>
+                      <label className="text-xs text-[#666] uppercase mb-2 block">Filtros de Material</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {([
+                          { key: 'blueBlock' as const, label: '🔵 Blue Block', active: cotizacionFilters.blueBlock },
+                          { key: 'photochromic' as const, label: '☀️ Fotocromático', active: cotizacionFilters.photochromic },
+                          { key: 'polarized' as const, label: '🕶️ Polarizado', active: cotizacionFilters.polarized },
+                        ]).map(f => (
+                          <button key={f.key} onClick={() => toggleFilter(f.key)} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${f.active ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#111] text-[#888] border border-[#1a1a1a] hover:border-[#333]'}`}>
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* === Lista de materiales === */}
+                    {materiales.length === 0 ? (
+                      <div className="text-center py-8 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                        <Package size={32} className="text-[#333] mx-auto mb-2" />
+                        <p className="text-xs text-[#666]">No hay materiales disponibles con estos filtros</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-[#888]">{materiales.length} opciones disponibles</p>
+
+                        {/* Si es progresivo, agrupar por material */}
+                        {detectedType === 'progresivo' ? (
+                          (() => {
+                            const byMaterial: Record<string, typeof materiales> = {};
+                            materiales.forEach(m => { (byMaterial[m.material] = byMaterial[m.material] || []).push(m); });
+                            return Object.entries(byMaterial).map(([mat, items]) => (
+                              <div key={mat} className="rounded-xl overflow-hidden" style={{ background: '#111', border: `1px solid ${selectedCotizacion?.material === mat ? '#D4AF37' : '#1a1a1a'}` }}>
+                                <div className="px-3 py-2 flex items-center justify-between" style={{ background: '#0a0a0a' }}>
+                                  <p className="text-xs font-bold text-white">{mat}</p>
+                                  <span className="text-[9px] text-[#555]">{items.length} opciones</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1 p-2">
+                                  {items.map(item => (
+                                    <button key={`${item.material}-${item.type}`} onClick={() => setSelectedCotizacion(item)}
+                                      className={`p-2 rounded-lg text-left transition-all ${selectedCotizacion?.material === item.material && selectedCotizacion?.type === item.type ? 'bg-[#D4AF37]/10 border border-[#D4AF37]/40' : 'bg-[#0a0a0a] border border-transparent hover:border-[#333]'}`}>
+                                      <p className="text-[10px] text-[#888]">{item.type}</p>
+                                      <p className="text-sm font-bold text-white">{formatCurrency(item.price)}</p>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ));
+                          })()
+                        ) : (
+                          /* Reelens: lista simple */
+                          materiales.map(item => (
+                            <button key={`${item.material}-${item.type}`} onClick={() => setSelectedCotizacion(item)}
+                              className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${selectedCotizacion?.material === item.material ? 'bg-[#D4AF37]/10 border border-[#D4AF37]/40' : 'bg-[#111] border border-[#1a1a1a] hover:border-[#333]'}`}>
+                              <div className="text-left">
+                                <p className="text-sm font-medium text-white">{item.material}</p>
+                                <p className="text-[10px] text-[#666]">{item.provider}</p>
+                              </div>
+                              <p className="text-sm font-bold" style={{ color: config.color }}>{formatCurrency(item.price)}</p>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+
+                    {/* === Perfil de Ganancia === */}
+                    <div>
+                      <label className="text-xs text-[#666] uppercase mb-2 block">Perfil de Ganancia</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['Básico', 'Estándar', 'Premium'] as const).map((profile) => (
+                          <button key={profile} onClick={() => setProfitProfile(profile)} className={`p-3 rounded-xl text-center transition-all ${profitProfile === profile ? 'gold-glow' : ''}`} style={{ background: '#111', border: `1px solid ${profitProfile === profile ? '#D4AF37' : '#1a1a1a'}` }}>
+                            <p className="text-xs font-bold text-[#D4AF37]">{profile}</p>
+                            <p className="text-lg font-bold text-white">{Math.round(getMargin(profile))}%</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* === Desglose de Precio === */}
+                    {selectedCotizacion && (
+                      <div className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                        <h3 className="text-sm font-semibold text-[#D4AF37] uppercase tracking-wider">Desglose de Precio</h3>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Material</span><span className="text-white">{selectedCotizacion.material}</span></div>
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Tipo</span><span className="text-white">{selectedCotizacion.type}</span></div>
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Proveedor</span><span className="text-white">{selectedCotizacion.provider}</span></div>
+                          <div className="h-px bg-[#222]" />
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Costo</span><span className="text-white font-medium">{formatCurrency(cotCost)}</span></div>
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen ({Math.round(cotMarginPct)}%)</span><span className="text-green-400">{formatCurrency(cotMargin)}</span></div>
+                          <div className="h-px bg-[#222]" />
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#D4AF37] font-bold">PRECIO FINAL</span>
+                            <span className="text-xl font-bold text-gold-gradient">{formatCurrency(cotFinal)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* === WhatsApp === */}
+                    {selectedCotizacion && cotFinal > 0 && (
+                      <button onClick={() => {
+                        const activeFilters = [];
+                        if (cotizacionFilters.blueBlock) activeFilters.push('Blue Block');
+                        if (cotizacionFilters.photochromic) activeFilters.push('Fotocromático');
+                        if (cotizacionFilters.polarized) activeFilters.push('Polarizado');
+                        const formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
+                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${config.label}\nMaterial: ${selectedCotizacion.material}\nSubtipo: ${selectedCotizacion.type}\nProveedor: ${selectedCotizacion.provider}\n${activeFilters.length ? 'Filtros: ' + activeFilters.join(', ') + '\n' : ''}Costo: ${formatCurrency(cotCost)}\nMargen: ${Math.round(cotMarginPct)}%\n\n💰 PRECIO: ${formatCurrency(cotFinal)}${formulaText}`;
+                        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                      }} className="w-full btn-gold flex items-center justify-center gap-2">
+                        <Send size={16} /> Compartir Cotización por WhatsApp
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </motion.div>
           )}
 
