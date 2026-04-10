@@ -1199,7 +1199,7 @@ export default function Page() {
   const tabs = currentUser
     ? (currentUser.role === 'admin'
       ? allTabs
-      : allTabs.filter((t) => ['home', 'formula', 'catalog', 'proveedores'].includes(t.id)))
+      : allTabs.filter((t) => ['home', 'formula', 'pricing', 'catalog', 'proveedores'].includes(t.id)))
     : allTabs.filter((t) => ['home', 'formula', 'catalog'].includes(t.id));
 
   // ==================== RENDER ====================
