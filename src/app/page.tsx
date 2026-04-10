@@ -1928,10 +1928,8 @@ export default function Page() {
                     {/* === WhatsApp === */}
                     {selectedCotizacion && cotFinal > 0 && (
                       <button onClick={() => {
-                        const formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
-                        const biselText = cotBisel ? `\nServicio: ${cotBisel} ${formatCurrency(cotBiselCost)}` : '';
-                        const costLabel = cotBisel ? `Costo (lente + servicio): ${formatCurrency(cotCostTotal)}` : `Costo lente: ${formatCurrency(cotCost)}`;
-                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\n${selectedCotizacion.columnLabel ? 'Rango: ' + selectedCotizacion.columnLabel + '\n' : ''}${selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' ? 'Grupo: ' + selectedCotizacion.grupo + '\n' : ''}Proveedor: ${selectedCotizacion.provider}\n${costLabel}\nMultiplicador: x${cotMarginPct}${biselText}\n\n💰 PRECIO: ${formatCurrency(cotFinal)}${formulaText}`;
+                        const formulaText = `\n\nFórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
+                        const text = `Juanita Pelaez Visión\n\nCotización:\nMaterial: ${selectedCotizacion.material}\nTipo: ${selectedCotizacion.tipoLente}\nPrecio: ${formatCurrency(cotFinal)}${formulaText}`;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                       }} className="w-full btn-gold flex items-center justify-center gap-2">
                         <Send size={16} /> Compartir Cotización por WhatsApp
