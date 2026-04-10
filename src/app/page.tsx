@@ -268,7 +268,11 @@ export default function Page() {
   // Cotización - Cerlents: dropdowns tipo lente + material grupo
   const [cotTipoLente, setCotTipoLente] = useState<'progresivo' | 'bifocal' | 'ocupacional' | 'monofocal' | ''>('');
   const [cotGrupo, setCotGrupo] = useState<string>('');
-  const [selectedCotizacion, setSelectedCotizacion] = useState<{ material: string; tipoLente: string; grupo: string; columnLabel: string; price: number } | null>(null);
+  // Cotización - Reelens: categoría + material
+  const [cotCategoria, setCotCategoria] = useState<string>('');
+  const [cotMaterial, setCotMaterial] = useState<string>('');
+  // Selección compartida (ambos proveedores)
+  const [selectedCotizacion, setSelectedCotizacion] = useState<{ material: string; tipoLente: string; grupo: string; columnLabel: string; price: number; provider: string } | null>(null);
 
   // Catalog
   const [genderFilter, setGenderFilter] = useState('todos');
@@ -1504,18 +1508,80 @@ export default function Page() {
                 </div>
               )}
 
-              {/* ===== FLUJO DE COTIZACIÓN CERLENTS ===== */}
+              {/* ===== FLUJO DE COTIZACIÓN ===== */}
               {(prescription.od.sph || prescription.oi.sph) && (() => {
                 const hasAdd = !!(prescription.od.add || prescription.oi.add);
-                const maxAbs = Math.max(
+                const addVal = Math.max(
+                  parseFloat(prescription.od.add) || 0,
+                  parseFloat(prescription.oi.add) || 0
+                );
+                const maxAbsSph = Math.max(
                   Math.abs(parseFloat(prescription.od.sph) || 0),
-                  Math.abs(parseFloat(prescription.oi.sph) || 0),
+                  Math.abs(parseFloat(prescription.oi.sph) || 0)
+                );
+                const maxAbsCyl = Math.max(
                   Math.abs(parseFloat(prescription.od.cyl) || 0),
                   Math.abs(parseFloat(prescription.oi.cyl) || 0)
                 );
-                const useCerlents = hasAdd || maxAbs >= 3;
+                // Cerlents: tiene ADD o graduación >= ±3.00
+                // Reelens: sin ADD o ADD <= +3.00 con cyl -2.00/-4.00
+                const useCerlents = hasAdd && (addVal > 3 || maxAbsSph >= 3 || maxAbsCyl > 4);
+                const useReelens = !useCerlents;
 
-                // Definición de columnas por tipo de lente
+                // === HELPERS DE RANGO ===
+                // Parsea rango tipo "N-2.00" → [0, 2], "-2.25/-4.00" → [2.25, 4], "N/+3.00" → [0, 3]
+                const parseRange = (range: string | null): [number, number] => {
+                  if (!range) return [0, 99];
+                  const r = range.replace(/\s/g, '');
+                  // Formato "N-2.00" o "N/+3.00"
+                  if (r.startsWith('N')) {
+                    const nums = r.replace('N', '').replace(/[\/\-]/g, ',').split(',').map(Number).filter(n => !isNaN(n));
+                    if (nums.length === 1) return [0, Math.abs(nums[0])];
+                    if (nums.length === 2) return [0, Math.abs(nums[1])];
+                    return [0, 99];
+                  }
+                  // Formato "-4.00/+4.00" o "-2.25/-4.00"
+                  const nums = r.split(/[\/\-]/).map(s => parseFloat(s)).filter(n => !isNaN(n));
+                  if (nums.length >= 2) return [Math.min(Math.abs(nums[0]), Math.abs(nums[1])), Math.max(Math.abs(nums[0]), Math.abs(nums[1]))];
+                  if (nums.length === 1) return [0, Math.abs(nums[0])];
+                  return [0, 99];
+                };
+
+                const valueInRange = (val: number, range: string | null): boolean => {
+                  if (!range) return true; // sin rango = aplica
+                  const [min, max] = parseRange(range);
+                  const absVal = Math.abs(val);
+                  return absVal >= min && absVal <= max;
+                };
+
+                // Obtener valores de ambos ojos para verificar
+                const odSph = parseFloat(prescription.od.sph) || 0;
+                const oiSph = parseFloat(prescription.oi.sph) || 0;
+                const odCyl = parseFloat(prescription.od.cyl) || 0;
+                const oiCyl = parseFloat(prescription.oi.cyl) || 0;
+                const odAdd = parseFloat(prescription.od.add) || 0;
+                const oiAdd = parseFloat(prescription.oi.add) || 0;
+
+                const formulaFitsRow = (row: typeof providerLensData[0]): boolean => {
+                  // Verificar esferas (ambos ojos deben entrar)
+                  if (row.esferas) {
+                    const sphOk = valueInRange(odSph, row.esferas) && valueInRange(oiSph, row.esferas);
+                    if (!sphOk) return false;
+                  }
+                  // Verificar cilindro (ambos ojos deben entrar)
+                  if (row.cilindro) {
+                    const cylOk = valueInRange(odCyl, row.cilindro) && valueInRange(oiCyl, row.cilindro);
+                    if (!cylOk) return false;
+                  }
+                  // Verificar adición (si la fórmula tiene ADD y la fila tiene rango de adición)
+                  if (row.adicion && hasAdd) {
+                    const addOk = valueInRange(odAdd, row.adicion) && valueInRange(oiAdd, row.adicion);
+                    if (!addOk) return false;
+                  }
+                  return true;
+                };
+
+                // === CERLENTS ===
                 const tipoLenteCols: Record<string, { key: keyof CerlensPrice; label: string; tier?: string }[]> = {
                   progresivo: [
                     { key: 'prog_prime', label: 'Prime Max', tier: 'premium' },
@@ -1529,23 +1595,31 @@ export default function Page() {
                     { key: 'bif_invisible', label: 'Invisible' },
                     { key: 'bif_bfree', label: 'B-Free' },
                   ],
-                  ocupacional: [
-                    { key: 'ocu_ocupacional', label: 'Ocupacional' },
-                  ],
+                  ocupacional: [{ key: 'ocu_ocupacional', label: 'Ocupacional' }],
                   monofocal: [
                     { key: 'mono_simple', label: 'Simple' },
                     { key: 'mono_relax', label: 'Relax' },
                     { key: 'mono_kids', label: 'Kids' },
                   ],
                 };
-
-                // Grupos de material disponibles en la tabla Cerlents
                 const gruposDisponibles = [...new Set(cerlensData.map(r => r.grupo))];
+                const cerlFilas = cotGrupo ? cerlensData.filter(r => r.grupo === cotGrupo) : [];
+                const cerlCols = cotTipoLente ? (tipoLenteCols[cotTipoLente] || []) : [];
 
-                // Filas filtradas según grupo seleccionado
-                const filas = cotGrupo ? cerlensData.filter(r => r.grupo === cotGrupo) : [];
-                // Columnas según tipo de lente seleccionado
-                const cols = cotTipoLente ? (tipoLenteCols[cotTipoLente] || []) : [];
+                // === REELENS ===
+                const reelensData = providerLensData.filter(r => r.provider === 'Reelens');
+                const categoriasReelens = [...new Set(reelensData.map(r => r.categoria))];
+                const materialesFiltrados = cotCategoria
+                  ? [...new Set(reelensData.filter(r => r.categoria === cotCategoria).map(r => r.material))]
+                  : [];
+                // Filtrar filas por categoría, material y rangos de fórmula
+                const reelFilas = cotCategoria && cotMaterial
+                  ? reelensData.filter(r =>
+                      r.categoria === cotCategoria &&
+                      r.material === cotMaterial &&
+                      formulaFitsRow(r)
+                    )
+                  : [];
 
                 // Cálculo de precio con margen
                 const cotCost = selectedCotizacion?.price || 0;
@@ -1555,14 +1629,19 @@ export default function Page() {
 
                 const tipoLenteLabels: Record<string, string> = { progresivo: 'Progresivo', bifocal: 'Bifocal', ocupacional: 'Ocupacional', monofocal: 'Monofocal' };
 
+                const selectStyle = { backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23888%27 stroke-width=%272%27%3E%3Cpath d=%27M6 9l6 6 6-6%27/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat' as const, backgroundPosition: 'right 12px center' };
+                const selectClass = 'w-full rounded-xl px-3 py-2.5 text-sm bg-[#111] text-white border border-[#1a1a1a] focus:border-[#D4AF37] outline-none appearance-none';
+
                 return (
                   <>
-                    {/* === Indicador Cerlents / Reelens === */}
+                    {/* === Indicador de tipo === */}
                     <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: useCerlents ? '#A855F710' : '#60A5FA10', border: `1px solid ${useCerlents ? '#A855F730' : '#60A5FA30'}` }}>
                       <div className="w-3 h-3 rounded-full" style={{ background: useCerlents ? '#A855F7' : '#60A5FA' }} />
                       <div>
-                        <p className="text-sm font-bold" style={{ color: useCerlents ? '#A855F7' : '#60A5FA' }}>{useCerlents ? 'Talla Digital — Cerlents' : 'Reelens'}</p>
-                        <p className="text-[10px] text-[#888]">{useCerlents ? (hasAdd ? 'Fórmula con adición · Cerlents' : 'Graduación alta (≥±3.00) · Cerlents') : 'Fórmula sin adición · Graduación baja'}</p>
+                        <p className="text-sm font-bold" style={{ color: useCerlents ? '#A855F7' : '#60A5FA' }}>{useCerlents ? 'Talla Digital — Cerlents' : 'Convencional — Reelens'}</p>
+                        <p className="text-[10px] text-[#888]">{useCerlents
+                          ? (hasAdd ? 'Fórmula con adición · Cerlents' : 'Graduación alta (≥±3.00) · Cerlents')
+                          : 'Fórmula convencional · Reelens'}</p>
                       </div>
                     </div>
 
@@ -1572,8 +1651,7 @@ export default function Page() {
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-xs text-[#666] uppercase mb-1.5 block">Tipo de Lente</label>
-                            <select value={cotTipoLente} onChange={e => { setCotTipoLente(e.target.value as any); setSelectedCotizacion(null); }}
-                              className="w-full rounded-xl px-3 py-2.5 text-sm bg-[#111] text-white border border-[#1a1a1a] focus:border-[#D4AF37] outline-none appearance-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23888%27 stroke-width=%272%27%3E%3Cpath d=%27M6 9l6 6 6-6%27/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}>
+                            <select value={cotTipoLente} onChange={e => { setCotTipoLente(e.target.value as any); setSelectedCotizacion(null); }} className={selectClass} style={selectStyle}>
                               <option value="">Seleccionar...</option>
                               <option value="progresivo">Progresivo</option>
                               <option value="bifocal">Bifocal</option>
@@ -1583,18 +1661,15 @@ export default function Page() {
                           </div>
                           <div>
                             <label className="text-xs text-[#666] uppercase mb-1.5 block">Material</label>
-                            <select value={cotGrupo} onChange={e => { setCotGrupo(e.target.value); setSelectedCotizacion(null); }}
-                              className="w-full rounded-xl px-3 py-2.5 text-sm bg-[#111] text-white border border-[#1a1a1a] focus:border-[#D4AF37] outline-none appearance-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23888%27 stroke-width=%272%27%3E%3Cpath d=%27M6 9l6 6 6-6%27/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}>
+                            <select value={cotGrupo} onChange={e => { setCotGrupo(e.target.value); setSelectedCotizacion(null); }} className={selectClass} style={selectStyle}>
                               <option value="">Seleccionar...</option>
                               {gruposDisponibles.map(g => <option key={g} value={g}>{g}</option>)}
                             </select>
                           </div>
                         </div>
-
                         {/* === Tabla Cerlents === */}
-                        {cotTipoLente && cotGrupo && filas.length > 0 && cols.length > 0 ? (
+                        {cotTipoLente && cotGrupo && cerlFilas.length > 0 && cerlCols.length > 0 ? (
                           <div className="rounded-xl overflow-hidden" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                            {/* Header de columnas con separación Premium / Medio */}
                             <div className="overflow-x-auto">
                               <table className="w-full text-[10px]">
                                 <thead>
@@ -1602,61 +1677,37 @@ export default function Page() {
                                     <th className="px-2 py-2 text-left text-[#888] font-bold uppercase tracking-wider min-w-[140px]">Material</th>
                                     {cotTipoLente === 'progresivo' && (
                                       <>
-                                        <th colSpan={3} className="px-2 py-1.5 text-center text-[#D4AF37] font-bold uppercase tracking-wider border-l border-[#D4AF37]/20">
-                                          <span className="text-[8px] opacity-60 block">Premium</span>Progresivos
-                                        </th>
-                                        <th colSpan={3} className="px-2 py-1.5 text-center text-[#60A5FA] font-bold uppercase tracking-wider border-l border-[#60A5FA]/20">
-                                          <span className="text-[8px] opacity-60 block">Medio</span>Progresivos
-                                        </th>
+                                        <th colSpan={3} className="px-2 py-1.5 text-center text-[#D4AF37] font-bold uppercase tracking-wider border-l border-[#D4AF37]/20"><span className="text-[8px] opacity-60 block">Premium</span>Progresivos</th>
+                                        <th colSpan={3} className="px-2 py-1.5 text-center text-[#60A5FA] font-bold uppercase tracking-wider border-l border-[#60A5FA]/20"><span className="text-[8px] opacity-60 block">Medio</span>Progresivos</th>
                                       </>
                                     )}
-                                    {cotTipoLente === 'bifocal' && (
-                                      <th colSpan={2} className="px-2 py-1.5 text-center text-[#22C55E] font-bold uppercase tracking-wider border-l border-[#22C55E]/20">Bifocal</th>
-                                    )}
-                                    {cotTipoLente === 'ocupacional' && (
-                                      <th className="px-2 py-1.5 text-center text-[#F97316] font-bold uppercase tracking-wider border-l border-[#F97316]/20">Ocupacional</th>
-                                    )}
-                                    {cotTipoLente === 'monofocal' && (
-                                      <th colSpan={3} className="px-2 py-1.5 text-center text-[#06B6D4] font-bold uppercase tracking-wider border-l border-[#06B6D4]/20">Monofocal</th>
-                                    )}
+                                    {cotTipoLente === 'bifocal' && <th colSpan={2} className="px-2 py-1.5 text-center text-[#22C55E] font-bold uppercase tracking-wider border-l border-[#22C55E]/20">Bifocal</th>}
+                                    {cotTipoLente === 'ocupacional' && <th className="px-2 py-1.5 text-center text-[#F97316] font-bold uppercase tracking-wider border-l border-[#F97316]/20">Ocupacional</th>}
+                                    {cotTipoLente === 'monofocal' && <th colSpan={3} className="px-2 py-1.5 text-center text-[#06B6D4] font-bold uppercase tracking-wider border-l border-[#06B6D4]/20">Monofocal</th>}
                                   </tr>
-                                  {/* Sub-columnas */}
                                   <tr style={{ background: '#0d0d0d' }}>
                                     <th className="px-2 py-1.5" />
-                                    {cols.map((col, ci) => {
+                                    {cerlCols.map((col, ci) => {
                                       const isLastOfTier = cotTipoLente === 'progresivo' && (ci === 2 || ci === 5);
-                                      const borderClass = ci === 0 ? 'border-l border-[#222]' : (isLastOfTier ? '' : '');
-                                      return (
-                                        <th key={col.key} className={`px-2 py-1.5 text-center font-medium uppercase tracking-wider ${borderClass}`} style={{ color: col.tier === 'premium' ? '#D4AF3780' : (cotTipoLente === 'progresivo' ? '#60A5FA80' : '#888') }}>
-                                          {col.label}
-                                        </th>
-                                      );
+                                      return <th key={col.key} className={`px-2 py-1.5 text-center font-medium uppercase tracking-wider ${ci === 0 ? 'border-l border-[#222]' : ''} ${isLastOfTier ? 'border-l border-[#222]' : ''}`} style={{ color: col.tier === 'premium' ? '#D4AF3780' : (cotTipoLente === 'progresivo' ? '#60A5FA80' : '#888') }}>{col.label}</th>;
                                     })}
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {filas.map((fila, fi) => {
-                                    const isSelected = selectedCotizacion?.material === fila.material;
+                                  {cerlFilas.map(fila => {
+                                    const isSelected = selectedCotizacion?.material === fila.material && selectedCotizacion?.provider === 'Cerlents';
                                     return (
                                       <tr key={fila.id} className={isSelected ? 'bg-[#D4AF37]/5' : ''} style={{ borderTop: '1px solid #1a1a1a' }}>
-                                        <td className="px-2 py-2">
-                                          <p className="text-[11px] font-medium text-white leading-tight">{fila.material}</p>
-                                        </td>
-                                        {cols.map((col, ci) => {
+                                        <td className="px-2 py-2"><p className="text-[11px] font-medium text-white leading-tight">{fila.material}</p></td>
+                                        {cerlCols.map((col, ci) => {
                                           const val = fila[col.key] as number | null;
-                                          const isLastOfTier = cotTipoLente === 'progresivo' && (ci === 2 || ci === 5);
-                                          const borderClass = ci === 0 ? 'border-l border-[#1a1a1a]' : (isLastOfTier ? 'border-l border-[#222]' : '');
                                           const isCellSelected = isSelected && selectedCotizacion?.columnLabel === col.label;
                                           return (
-                                            <td key={col.key} className={`px-1 py-1.5 text-center ${borderClass}`}>
+                                            <td key={col.key} className={`px-1 py-1.5 text-center ${ci === 0 ? 'border-l border-[#1a1a1a]' : ''} ${cotTipoLente === 'progresivo' && (ci === 3) ? 'border-l border-[#222]' : ''}`}>
                                               {val !== null && val !== undefined ? (
-                                                <button onClick={() => setSelectedCotizacion({ material: fila.material, tipoLente: cotTipoLente, grupo: cotGrupo, columnLabel: col.label, price: val })}
-                                                  className={`w-full px-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${isCellSelected ? 'bg-[#D4AF37] text-black shadow-lg shadow-[#D4AF37]/20' : 'hover:bg-[#1a1a1a] text-white'}`}>
-                                                  {formatCurrency(val)}
-                                                </button>
-                                              ) : (
-                                                <span className="text-[#222]">—</span>
-                                              )}
+                                                <button onClick={() => setSelectedCotizacion({ material: fila.material, tipoLente: cotTipoLente, grupo: cotGrupo, columnLabel: col.label, price: val, provider: 'Cerlents' })}
+                                                  className={`w-full px-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${isCellSelected ? 'bg-[#D4AF37] text-black shadow-lg shadow-[#D4AF37]/20' : 'hover:bg-[#1a1a1a] text-white'}`}>{formatCurrency(val)}</button>
+                                              ) : <span className="text-[#222]">—</span>}
                                             </td>
                                           );
                                         })}
@@ -1667,28 +1718,92 @@ export default function Page() {
                               </table>
                             </div>
                             <div className="px-3 py-2 flex items-center justify-between" style={{ background: '#0a0a0a' }}>
-                              <span className="text-[9px] text-[#555]">{filas.length} materiales · {cols.length} columnas</span>
-                              <button onClick={() => setSelectedCotizacion(null)} className="text-[9px] text-[#555] hover:text-[#888]">Limpiar selección</button>
+                              <span className="text-[9px] text-[#555]">{cerlFilas.length} materiales · {cerlCols.length} columnas</span>
+                              <button onClick={() => setSelectedCotizacion(null)} className="text-[9px] text-[#555] hover:text-[#888]">Limpiar</button>
                             </div>
                           </div>
-                        ) : cotTipoLente && cotGrupo && filas.length === 0 ? (
-                          <div className="text-center py-6 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                            <Package size={28} className="text-[#333] mx-auto mb-2" />
-                            <p className="text-xs text-[#666]">No hay materiales en este grupo</p>
-                          </div>
+                        ) : cotTipoLente && cotGrupo ? (
+                          <div className="text-center py-6 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}><Package size={28} className="text-[#333] mx-auto mb-2" /><p className="text-xs text-[#666]">No hay materiales en este grupo</p></div>
                         ) : (
-                          <div className="text-center py-8 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                            <EyeIcon size={32} className="text-[#333] mx-auto mb-2" />
-                            <p className="text-xs text-[#666]">Selecciona el tipo de lente y material para ver precios</p>
-                          </div>
+                          <div className="text-center py-8 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}><EyeIcon size={32} className="text-[#333] mx-auto mb-2" /><p className="text-xs text-[#666]">Selecciona tipo de lente y material</p></div>
                         )}
                       </>
                     ) : (
-                      /* === Sin adición / graduación baja → Reelens (pendiente) === */
-                      <div className="text-center py-8 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                        <EyeIcon size={32} className="text-[#333] mx-auto mb-2" />
-                        <p className="text-xs text-[#666]">Fórmula sin adición — Reelens (próximamente)</p>
-                      </div>
+                      /* === REELENS === */
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs text-[#666] uppercase mb-1.5 block">Categoría</label>
+                            <select value={cotCategoria} onChange={e => { setCotCategoria(e.target.value); setCotMaterial(''); setSelectedCotizacion(null); }} className={selectClass} style={selectStyle}>
+                              <option value="">Seleccionar...</option>
+                              {categoriasReelens.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-[#666] uppercase mb-1.5 block">Material</label>
+                            <select value={cotMaterial} onChange={e => { setCotMaterial(e.target.value); setSelectedCotizacion(null); }} className={selectClass} style={selectStyle} disabled={!cotCategoria}>
+                              <option value="">Seleccionar...</option>
+                              {materialesFiltrados.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
+                        {cotCategoria && cotMaterial && (
+                          reelFilas.length > 0 ? (
+                            <div className="rounded-xl overflow-hidden" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-[11px]">
+                                  <thead>
+                                    <tr style={{ background: '#0a0a0a' }}>
+                                      <th className="px-3 py-2 text-left text-[#888] font-bold uppercase tracking-wider">Material</th>
+                                      <th className="px-3 py-2 text-center text-[#888] font-bold uppercase tracking-wider">Esferas</th>
+                                      <th className="px-3 py-2 text-center text-[#888] font-bold uppercase tracking-wider">Cilindro</th>
+                                      <th className="px-3 py-2 text-center text-[#888] font-bold uppercase tracking-wider">Adición</th>
+                                      <th className="px-3 py-2 text-center text-[#60A5FA] font-bold uppercase tracking-wider">Precio Par</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {reelFilas.map(row => {
+                                      const isSelected = selectedCotizacion?.material === row.material && selectedCotizacion?.columnLabel === row.esferas && selectedCotizacion?.provider === 'Reelens';
+                                      return (
+                                        <tr key={row.id} className={isSelected ? 'bg-[#D4AF37]/5' : ''} style={{ borderTop: '1px solid #1a1a1a' }}>
+                                          <td className="px-3 py-2"><p className="font-medium text-white leading-tight">{row.material}</p>{row.tipo_lente && <p className="text-[9px] text-[#555]">{row.tipo_lente}</p>}</td>
+                                          <td className="px-3 py-2 text-center text-[#ccc]">{row.esferas || '—'}</td>
+                                          <td className="px-3 py-2 text-center text-[#ccc]">{row.cilindro || '—'}</td>
+                                          <td className="px-3 py-2 text-center text-[#ccc]">{row.adicion || '—'}</td>
+                                          <td className="px-2 py-2 text-center">
+                                            <button onClick={() => setSelectedCotizacion({ material: row.material, tipoLente: cotCategoria, grupo: row.esferas || '', columnLabel: `${row.cilindro || ''} ${row.adicion || ''}`.trim(), price: row.precio_par, provider: 'Reelens' })}
+                                              className={`px-3 py-2 rounded-lg font-bold transition-all ${isSelected ? 'bg-[#D4AF37] text-black shadow-lg shadow-[#D4AF37]/20' : 'hover:bg-[#1a1a1a] text-[#60A5FA]'}`}>
+                                              {formatCurrency(row.precio_par)}
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <div className="px-3 py-2 flex items-center justify-between" style={{ background: '#0a0a0a' }}>
+                                <span className="text-[9px] text-[#555]">{reelFilas.length} rango{reelFilas.length !== 1 ? 's' : ''} disponible{reelFilas.length !== 1 ? 's' : ''} para esta fórmula</span>
+                                <button onClick={() => setSelectedCotizacion(null)} className="text-[9px] text-[#555] hover:text-[#888]">Limpiar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                              <Package size={28} className="text-[#333] mx-auto mb-2" />
+                              <p className="text-xs text-[#666]">No hay rangos disponibles para esta fórmula</p>
+                              <p className="text-[10px] text-[#444] mt-1">La fórmula no entra en los rangos de esta tabla</p>
+                            </div>
+                          )
+                        )}
+
+                        {!cotCategoria && (
+                          <div className="text-center py-8 rounded-xl" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                            <EyeIcon size={32} className="text-[#333] mx-auto mb-2" />
+                            <p className="text-xs text-[#666]">Selecciona categoría y material para ver precios</p>
+                          </div>
+                        )}
+                      </>
                     )}
 
                     {/* === Perfil de Ganancia === */}
@@ -1710,10 +1825,10 @@ export default function Page() {
                         <h3 className="text-sm font-semibold text-[#D4AF37] uppercase tracking-wider">Desglose de Precio</h3>
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between"><span className="text-[#A0A0A0]">Material</span><span className="text-white">{selectedCotizacion.material}</span></div>
-                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Tipo de Lente</span><span className="text-white capitalize">{tipoLenteLabels[selectedCotizacion.tipoLente] || selectedCotizacion.tipoLente}</span></div>
-                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Columna</span><span className="text-white">{selectedCotizacion.columnLabel}</span></div>
-                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Grupo</span><span className="text-white">{selectedCotizacion.grupo}</span></div>
-                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Proveedor</span><span className="text-white">Cerlents</span></div>
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Tipo</span><span className="text-white">{selectedCotizacion.tipoLente}</span></div>
+                          {selectedCotizacion.columnLabel && <div className="flex justify-between"><span className="text-[#A0A0A0]">Rango</span><span className="text-white">{selectedCotizacion.columnLabel}</span></div>}
+                          {selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' && <div className="flex justify-between"><span className="text-[#A0A0A0]">Grupo</span><span className="text-white">{selectedCotizacion.grupo}</span></div>}
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Proveedor</span><span className="text-white">{selectedCotizacion.provider}</span></div>
                           <div className="h-px bg-[#222]" />
                           <div className="flex justify-between"><span className="text-[#A0A0A0]">Costo</span><span className="text-white font-medium">{formatCurrency(cotCost)}</span></div>
                           <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen ({Math.round(cotMarginPct)}%)</span><span className="text-green-400">{formatCurrency(cotMargin)}</span></div>
@@ -1730,7 +1845,7 @@ export default function Page() {
                     {selectedCotizacion && cotFinal > 0 && (
                       <button onClick={() => {
                         const formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
-                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${tipoLenteLabels[selectedCotizacion.tipoLente] || selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\nColumna: ${selectedCotizacion.columnLabel}\nGrupo: ${selectedCotizacion.grupo}\nProveedor: Cerlents\nCosto: ${formatCurrency(cotCost)}\nMargen: ${Math.round(cotMarginPct)}%\n\n💰 PRECIO: ${formatCurrency(cotFinal)}${formulaText}`;
+                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\n${selectedCotizacion.columnLabel ? 'Rango: ' + selectedCotizacion.columnLabel + '\n' : ''}${selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' ? 'Grupo: ' + selectedCotizacion.grupo + '\n' : ''}Proveedor: ${selectedCotizacion.provider}\nCosto: ${formatCurrency(cotCost)}\nMargen: ${Math.round(cotMarginPct)}%\n\n💰 PRECIO: ${formatCurrency(cotFinal)}${formulaText}`;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                       }} className="w-full btn-gold flex items-center justify-center gap-2">
                         <Send size={16} /> Compartir Cotización por WhatsApp
