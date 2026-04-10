@@ -1837,7 +1837,8 @@ export default function Page() {
                 ))}
               </div>
 
-              {/* Stats */}
+              {/* Stats Reelens - solo cuando sub-tab es Reelens */}
+              {proveedorSubTab === 'Reelens' && (
               <div className="grid grid-cols-4 gap-2">
                 {(() => {
                   const cats = providerLensData.reduce<Record<string, number>>((acc, r) => { acc[r.categoria] = (acc[r.categoria] || 0) + 1; return acc; }, {});
@@ -1856,6 +1857,7 @@ export default function Page() {
                   ));
                 })()}
               </div>
+              )}
 
               {/* Agregar nuevo lente (admin) */}
               {currentUser?.role === 'admin' && (
