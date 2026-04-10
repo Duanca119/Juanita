@@ -1644,8 +1644,6 @@ export default function Page() {
                 // Cálculo de precio con margen
                 const cotCost = selectedCotizacion?.price || 0;
                 const cotMarginPct = getMargin(profitProfile);
-                const cotFinal = Math.round(cotCost * cotMarginPct);
-                const cotMargin = cotFinal - cotCost;
 
                 // Servicios adicionales (bisel, filtro uv, color) - solo Reelens
                 const biselOptions: Record<string, number> = {
@@ -1657,7 +1655,9 @@ export default function Page() {
                   'Color': 7000,
                 };
                 const cotBiselCost = biselOptions[cotBisel] || 0;
-                const cotTotalFinal = cotFinal + cotBiselCost;
+                const cotCostTotal = cotCost + cotBiselCost;
+                const cotFinal = Math.round(cotCostTotal * cotMarginPct);
+                const cotMargin = cotFinal - cotCostTotal;
 
                 const tipoLenteLabels: Record<string, string> = { progresivo: 'Progresivo', bifocal: 'Bifocal', ocupacional: 'Ocupacional', monofocal: 'Monofocal' };
 
@@ -1874,19 +1874,6 @@ export default function Page() {
                       </>
                     )}
 
-                    {/* === Perfil de Ganancia === */}
-                    <div>
-                      <label className="text-xs text-[#666] uppercase mb-2 block">Perfil de Ganancia</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['Básico', 'Estándar', 'Premium'] as const).map((profile) => (
-                          <button key={profile} onClick={() => setProfitProfile(profile)} className={`p-3 rounded-xl text-center transition-all ${profitProfile === profile ? 'gold-glow' : ''}`} style={{ background: '#111', border: `1px solid ${profitProfile === profile ? '#D4AF37' : '#1a1a1a'}` }}>
-                            <p className="text-xs font-bold text-[#D4AF37]">{profile}</p>
-                            <p className="text-lg font-bold text-white">x{getMargin(profile)}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
                     {/* === Servicios Adicionales (solo Reelens) === */}
                     {useReelens && (
                       <div>
@@ -1900,6 +1887,19 @@ export default function Page() {
                       </div>
                     )}
 
+                    {/* === Perfil de Ganancia === */}
+                    <div>
+                      <label className="text-xs text-[#666] uppercase mb-2 block">Perfil de Ganancia</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['Básico', 'Estándar', 'Premium'] as const).map((profile) => (
+                          <button key={profile} onClick={() => setProfitProfile(profile)} className={`p-3 rounded-xl text-center transition-all ${profitProfile === profile ? 'gold-glow' : ''}`} style={{ background: '#111', border: `1px solid ${profitProfile === profile ? '#D4AF37' : '#1a1a1a'}` }}>
+                            <p className="text-xs font-bold text-[#D4AF37]">{profile}</p>
+                            <p className="text-lg font-bold text-white">x{getMargin(profile)}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* === Desglose de Precio === */}
                     {selectedCotizacion && (
                       <div className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
@@ -1910,29 +1910,28 @@ export default function Page() {
                           {selectedCotizacion.columnLabel && <div className="flex justify-between"><span className="text-[#A0A0A0]">Rango</span><span className="text-white">{selectedCotizacion.columnLabel}</span></div>}
                           {selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' && <div className="flex justify-between"><span className="text-[#A0A0A0]">Grupo</span><span className="text-white">{selectedCotizacion.grupo}</span></div>}
                           <div className="flex justify-between"><span className="text-[#A0A0A0]">Proveedor</span><span className="text-white">{selectedCotizacion.provider}</span></div>
-                          <div className="h-px bg-[#222]" />
-                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Costo lente</span><span className="text-white font-medium">{formatCurrency(cotCost)}</span></div>
-                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen (x{cotMarginPct})</span><span className="text-green-400">{formatCurrency(cotMargin)}</span></div>
                           {cotBisel && (
-                            <>
-                              <div className="flex justify-between"><span className="text-[#A0A0A0]">{cotBisel}</span><span className="text-yellow-400">{formatCurrency(cotBiselCost)}</span></div>
-                            </>
+                            <div className="flex justify-between"><span className="text-[#A0A0A0]">{cotBisel}</span><span className="text-yellow-400">{formatCurrency(cotBiselCost)}</span></div>
                           )}
+                          <div className="h-px bg-[#222]" />
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Costo lente{cotBisel ? ' + servicio' : ''}</span><span className="text-white font-medium">{formatCurrency(cotCostTotal)}</span></div>
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen (x{cotMarginPct})</span><span className="text-green-400">{formatCurrency(cotMargin)}</span></div>
                           <div className="h-px bg-[#222]" />
                           <div className="flex justify-between items-center">
                             <span className="text-[#D4AF37] font-bold">PRECIO FINAL</span>
-                            <span className="text-xl font-bold text-gold-gradient">{formatCurrency(cotTotalFinal)}</span>
+                            <span className="text-xl font-bold text-gold-gradient">{formatCurrency(cotFinal)}</span>
                           </div>
                         </div>
                       </div>
                     )}
 
                     {/* === WhatsApp === */}
-                    {selectedCotizacion && cotTotalFinal > 0 && (
+                    {selectedCotizacion && cotFinal > 0 && (
                       <button onClick={() => {
                         const formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
                         const biselText = cotBisel ? `\nServicio: ${cotBisel} ${formatCurrency(cotBiselCost)}` : '';
-                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\n${selectedCotizacion.columnLabel ? 'Rango: ' + selectedCotizacion.columnLabel + '\n' : ''}${selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' ? 'Grupo: ' + selectedCotizacion.grupo + '\n' : ''}Proveedor: ${selectedCotizacion.provider}\nCosto lente: ${formatCurrency(cotCost)}\nMultiplicador: x${cotMarginPct}${biselText}\n\n💰 PRECIO: ${formatCurrency(cotTotalFinal)}${formulaText}`;
+                        const costLabel = cotBisel ? `Costo (lente + servicio): ${formatCurrency(cotCostTotal)}` : `Costo lente: ${formatCurrency(cotCost)}`;
+                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\n${selectedCotizacion.columnLabel ? 'Rango: ' + selectedCotizacion.columnLabel + '\n' : ''}${selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' ? 'Grupo: ' + selectedCotizacion.grupo + '\n' : ''}Proveedor: ${selectedCotizacion.provider}\n${costLabel}\nMultiplicador: x${cotMarginPct}${biselText}\n\n💰 PRECIO: ${formatCurrency(cotFinal)}${formulaText}`;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                       }} className="w-full btn-gold flex items-center justify-center gap-2">
                         <Send size={16} /> Compartir Cotización por WhatsApp
