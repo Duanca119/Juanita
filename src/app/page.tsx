@@ -14,7 +14,7 @@ import {
 // ==================== TYPES ====================
 type TabId = 'home' | 'formula' | 'pricing' | 'catalog' | 'proveedores' | 'soporte';
 type ProveedorSubTab = 'Reelens' | 'Cerlents';
-type SoporteSubTab = 'backup' | 'users' | 'database';
+type SoporteSubTab = 'backup' | 'users' | 'proveedores' | 'database';
 
 interface CurrentUser {
   id: string;
@@ -2268,10 +2268,13 @@ export default function Page() {
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {([
                   { id: 'backup' as const, label: 'Respaldo', icon: <Download size={14} /> },
-                  ...(currentUser?.role === 'admin' ? [{ id: 'users' as const, label: 'Usuarios', icon: <Users size={14} /> }] : []),
+                  ...(currentUser?.role === 'admin' ? [
+                    { id: 'users' as const, label: 'Usuarios', icon: <Users size={14} /> },
+                    { id: 'proveedores' as const, label: 'Proveedores', icon: <Building2 size={14} /> },
+                  ] : []),
                   { id: 'database' as const, label: 'Base Datos', icon: <Database size={14} /> },
                 ]).map((tab) => (
-                  <button key={tab.id} onClick={() => { setSoporteSubTab(tab.id); if (tab.id === 'users') fetchUsers(); }} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${soporteSubTab === tab.id ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30' : 'bg-[#111] text-[#888] border border-[#1a1a1a]'}`}>
+                  <button key={tab.id} onClick={() => { setSoporteSubTab(tab.id); if (tab.id === 'users') fetchUsers(); if (tab.id === 'proveedores') fetchProviders(); }} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${soporteSubTab === tab.id ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30' : 'bg-[#111] text-[#888] border border-[#1a1a1a]'}`}>
                     {tab.icon} {tab.label}
                   </button>
                 ))}
@@ -2351,6 +2354,44 @@ export default function Page() {
                         <div className="flex gap-1">
                           <button onClick={() => { setEditingUser(user); setUserForm({ name: user.name, email: user.email, password: '', role: user.role }); setShowUserForm(true); }} className="p-1.5 rounded-lg text-[#666] hover:text-[#D4AF37] transition-colors"><Edit3 size={14} /></button>
                           <button onClick={() => deleteUser(user.id)} className="p-1.5 rounded-lg text-[#666] hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* === Proveedores Tab (Admin only) === */}
+              {soporteSubTab === 'proveedores' && currentUser?.role === 'admin' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-[#A0A0A0]">{providers.length} proveedores</p>
+                    <button onClick={() => { setEditingProvider(null); setProviderForm({ name: '', contact: '', phone: '' }); setShowProviderForm(true); }} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1"><Plus size={14} /> Nuevo</button>
+                  </div>
+
+                  {showProviderForm && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #222' }}>
+                      <input className="premium-input text-sm" placeholder="Nombre del proveedor *" value={providerForm.name} onChange={(e) => setProviderForm((f) => ({ ...f, name: e.target.value }))} />
+                      <input className="premium-input text-sm" placeholder="Contacto" value={providerForm.contact} onChange={(e) => setProviderForm((f) => ({ ...f, contact: e.target.value }))} />
+                      <input className="premium-input text-sm" placeholder="Teléfono" value={providerForm.phone} onChange={(e) => setProviderForm((f) => ({ ...f, phone: e.target.value }))} />
+                      <div className="flex gap-2">
+                        <button onClick={saveProvider} disabled={loading} className="flex-1 btn-gold text-sm flex items-center justify-center gap-1">{loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {editingProvider ? 'Actualizar' : 'Crear'}</button>
+                        <button onClick={() => { setShowProviderForm(false); setEditingProvider(null); }} className="px-4 py-2 rounded-xl text-sm bg-[#1a1a1a] text-[#888]">Cancelar</button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {providers.map((prov) => (
+                    <div key={prov.id} className="rounded-xl p-3 flex items-center justify-between card-hover" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
+                      <div>
+                        <p className="text-sm font-medium text-white">{prov.name}</p>
+                        <p className="text-xs text-[#666]">{prov.contact || 'Sin contacto'} {prov.phone ? `· ${prov.phone}` : ''}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#3B82F6]/20 text-blue-400">Proveedor</span>
+                        <div className="flex gap-1">
+                          <button onClick={() => { setEditingProvider(prov); setProviderForm({ name: prov.name, contact: prov.contact || '', phone: prov.phone || '' }); setShowProviderForm(true); }} className="p-1.5 rounded-lg text-[#666] hover:text-[#D4AF37] transition-colors"><Edit3 size={14} /></button>
+                          <button onClick={() => deleteProvider(prov.id)} className="p-1.5 rounded-lg text-[#666] hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
                         </div>
                       </div>
                     </div>
