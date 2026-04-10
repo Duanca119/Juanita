@@ -1637,8 +1637,20 @@ export default function Page() {
                 const categoriasReelens = hasAdd
                   ? [...new Set(reelensData.filter(r => categoriasConAdd.has(r.categoria)).map(r => r.categoria))]
                   : [...new Set(reelensData.filter(r => !categoriasConAdd.has(r.categoria)).map(r => r.categoria))];
+                // Categorías que tienen materiales extra rango (Terminados y Blue Visión)
+                const categoriasConExtra = ['Lentes Terminados', 'Blue Visión Sencilla'];
+                // Filtrar materiales: si extra rango y es categoría con extra, solo mostrar "extra"
                 const materialesFiltrados = cotCategoria
-                  ? [...new Set(reelensData.filter(r => r.categoria === cotCategoria).map(r => r.material))]
+                  ? (() => {
+                      const mats = [...new Set(reelensData.filter(r => r.categoria === cotCategoria).map(r => r.material))];
+                      if (categoriasConExtra.includes(cotCategoria) && isExtraRange) {
+                        return mats.filter(m => /extra/i.test(m));
+                      }
+                      if (categoriasConExtra.includes(cotCategoria) && !isExtraRange) {
+                        return mats.filter(m => !/extra/i.test(m));
+                      }
+                      return mats;
+                    })()
                   : [];
                 // Filtrar filas por categoría, material y rangos de fórmula
                 const reelFilas = cotCategoria && cotMaterial
