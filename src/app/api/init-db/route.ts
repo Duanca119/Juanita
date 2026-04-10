@@ -8,9 +8,9 @@ export async function POST() {
     
     if (!existingSettings || existingSettings.length === 0) {
       await supabase.from('settings').insert([
-        { name: 'Básico', profit_margin: 0.3 },
-        { name: 'Estándar', profit_margin: 0.5 },
-        { name: 'Premium', profit_margin: 0.7 },
+        { name: 'Básico', profit_margin: 2.1 },
+        { name: 'Estándar', profit_margin: 2.2 },
+        { name: 'Premium', profit_margin: 2.5 },
       ]);
     }
 

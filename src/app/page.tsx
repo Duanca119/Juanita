@@ -239,7 +239,7 @@ export default function Page() {
   // Derived settings
   const getMargin = useCallback((name: string): number => {
     const item = settingsList.find((s) => s.name.toLowerCase() === name.toLowerCase());
-    return item ? item.profit_margin * 100 : 0;
+    return item ? item.profit_margin : 1;
   }, [settingsList]);
 
   // Loading
@@ -888,8 +888,8 @@ export default function Page() {
     const extrasTotal = extras.reduce((a, b) => a + b, 0);
     const cost = base + extrasTotal;
     const marginPct = getMargin(profitProfile);
-    const margin = cost * (marginPct / 100);
-    const finalPrice = cost + margin;
+    const finalPrice = Math.round(cost * marginPct);
+    const margin = finalPrice - cost;
     return { base, extrasTotal, cost, marginPct, margin, finalPrice };
   })();
 
@@ -1642,8 +1642,8 @@ export default function Page() {
                 // Cálculo de precio con margen
                 const cotCost = selectedCotizacion?.price || 0;
                 const cotMarginPct = getMargin(profitProfile);
-                const cotMargin = cotCost * (cotMarginPct / 100);
-                const cotFinal = cotCost + cotMargin;
+                const cotFinal = Math.round(cotCost * cotMarginPct);
+                const cotMargin = cotFinal - cotCost;
 
                 const tipoLenteLabels: Record<string, string> = { progresivo: 'Progresivo', bifocal: 'Bifocal', ocupacional: 'Ocupacional', monofocal: 'Monofocal' };
 
@@ -1867,7 +1867,7 @@ export default function Page() {
                         {(['Básico', 'Estándar', 'Premium'] as const).map((profile) => (
                           <button key={profile} onClick={() => setProfitProfile(profile)} className={`p-3 rounded-xl text-center transition-all ${profitProfile === profile ? 'gold-glow' : ''}`} style={{ background: '#111', border: `1px solid ${profitProfile === profile ? '#D4AF37' : '#1a1a1a'}` }}>
                             <p className="text-xs font-bold text-[#D4AF37]">{profile}</p>
-                            <p className="text-lg font-bold text-white">{Math.round(getMargin(profile))}%</p>
+                            <p className="text-lg font-bold text-white">x{getMargin(profile)}</p>
                           </button>
                         ))}
                       </div>
@@ -1885,7 +1885,7 @@ export default function Page() {
                           <div className="flex justify-between"><span className="text-[#A0A0A0]">Proveedor</span><span className="text-white">{selectedCotizacion.provider}</span></div>
                           <div className="h-px bg-[#222]" />
                           <div className="flex justify-between"><span className="text-[#A0A0A0]">Costo</span><span className="text-white font-medium">{formatCurrency(cotCost)}</span></div>
-                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen ({Math.round(cotMarginPct)}%)</span><span className="text-green-400">{formatCurrency(cotMargin)}</span></div>
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen (x{cotMarginPct})</span><span className="text-green-400">{formatCurrency(cotMargin)}</span></div>
                           <div className="h-px bg-[#222]" />
                           <div className="flex justify-between items-center">
                             <span className="text-[#D4AF37] font-bold">PRECIO FINAL</span>
@@ -1899,7 +1899,7 @@ export default function Page() {
                     {selectedCotizacion && cotFinal > 0 && (
                       <button onClick={() => {
                         const formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
-                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\n${selectedCotizacion.columnLabel ? 'Rango: ' + selectedCotizacion.columnLabel + '\n' : ''}${selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' ? 'Grupo: ' + selectedCotizacion.grupo + '\n' : ''}Proveedor: ${selectedCotizacion.provider}\nCosto: ${formatCurrency(cotCost)}\nMargen: ${Math.round(cotMarginPct)}%\n\n💰 PRECIO: ${formatCurrency(cotFinal)}${formulaText}`;
+                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\n${selectedCotizacion.columnLabel ? 'Rango: ' + selectedCotizacion.columnLabel + '\n' : ''}${selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' ? 'Grupo: ' + selectedCotizacion.grupo + '\n' : ''}Proveedor: ${selectedCotizacion.provider}\nCosto: ${formatCurrency(cotCost)}\nMultiplicador: x${cotMarginPct}\n\n💰 PRECIO: ${formatCurrency(cotFinal)}${formulaText}`;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                       }} className="w-full btn-gold flex items-center justify-center gap-2">
                         <Send size={16} /> Compartir Cotización por WhatsApp
