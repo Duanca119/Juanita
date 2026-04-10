@@ -1616,7 +1616,11 @@ export default function Page() {
 
                 // === REELENS ===
                 const reelensData = providerLensData.filter(r => r.provider === 'Reelens');
-                const categoriasReelens = [...new Set(reelensData.map(r => r.categoria))];
+                // Si tiene ADD, solo mostrar categorías que tengan campo adición
+                const categoriasConAdd = new Set(reelensData.filter(r => r.adicion).map(r => r.categoria));
+                const categoriasReelens = hasAdd
+                  ? [...new Set(reelensData.filter(r => categoriasConAdd.has(r.categoria)).map(r => r.categoria))]
+                  : [...new Set(reelensData.filter(r => !categoriasConAdd.has(r.categoria)).map(r => r.categoria))];
                 const materialesFiltrados = cotCategoria
                   ? [...new Set(reelensData.filter(r => r.categoria === cotCategoria).map(r => r.material))]
                   : [];
