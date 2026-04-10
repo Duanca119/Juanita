@@ -1527,8 +1527,8 @@ export default function Page() {
                   Math.abs(parseFloat(prescription.od.cyl) || 0),
                   Math.abs(parseFloat(prescription.oi.cyl) || 0)
                 );
-                // Determinar cuáles proveedores aplican
-                const canCerlents = hasAdd || maxAbsSph >= 3 || maxAbsCyl > 4;
+                // Determinar cuáles proveedores aplican (extra rango: esfera -6.00/-4.00, cilindro -2.25/-4.00)
+                const canCerlents = hasAdd || maxAbsSph >= 4 || maxAbsCyl >= 2.25;
                 const canReelens = !hasAdd || addVal <= 3;
                 const bothApply = canCerlents && canReelens;
                 // Proveedor activo: si solo uno aplica ir directo, si ambos esperar selección
@@ -1579,19 +1579,19 @@ export default function Page() {
                 const oiAdd = parseFloat(prescription.oi.add) || 0;
 
                 const formulaFitsRow = (row: typeof providerLensData[0]): boolean => {
-                  // Verificar esferas (ambos ojos deben entrar)
+                  // Verificar esferas (al menos un ojo debe entrar)
                   if (row.esferas) {
-                    const sphOk = valueInRange(odSph, row.esferas) && valueInRange(oiSph, row.esferas);
+                    const sphOk = valueInRange(odSph, row.esferas) || valueInRange(oiSph, row.esferas);
                     if (!sphOk) return false;
                   }
-                  // Verificar cilindro (ambos ojos deben entrar)
+                  // Verificar cilindro (al menos un ojo debe entrar)
                   if (row.cilindro) {
-                    const cylOk = valueInRange(odCyl, row.cilindro) && valueInRange(oiCyl, row.cilindro);
+                    const cylOk = valueInRange(odCyl, row.cilindro) || valueInRange(oiCyl, row.cilindro);
                     if (!cylOk) return false;
                   }
-                  // Verificar adición (si la fórmula tiene ADD y la fila tiene rango de adición)
+                  // Verificar adición (al menos un ojo debe entrar, si la fórmula tiene ADD)
                   if (row.adicion && hasAdd) {
-                    const addOk = valueInRange(odAdd, row.adicion) && valueInRange(oiAdd, row.adicion);
+                    const addOk = valueInRange(odAdd, row.adicion) || valueInRange(oiAdd, row.adicion);
                     if (!addOk) return false;
                   }
                   return true;
