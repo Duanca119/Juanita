@@ -271,6 +271,8 @@ export default function Page() {
   // Cotización - Reelens: categoría + material
   const [cotCategoria, setCotCategoria] = useState<string>('');
   const [cotMaterial, setCotMaterial] = useState<string>('');
+  // Selección de proveedor (cuando aplica ambos)
+  const [cotProveedor, setCotProveedor] = useState<'Cerlents' | 'Reelens' | ''>('');
   // Selección compartida (ambos proveedores)
   const [selectedCotizacion, setSelectedCotizacion] = useState<{ material: string; tipoLente: string; grupo: string; columnLabel: string; price: number; provider: string } | null>(null);
 
@@ -1523,10 +1525,14 @@ export default function Page() {
                   Math.abs(parseFloat(prescription.od.cyl) || 0),
                   Math.abs(parseFloat(prescription.oi.cyl) || 0)
                 );
-                // Cerlents: tiene ADD o graduación >= ±3.00
-                // Reelens: sin ADD o ADD <= +3.00 con cyl -2.00/-4.00
-                const useCerlents = hasAdd && (addVal > 3 || maxAbsSph >= 3 || maxAbsCyl > 4);
-                const useReelens = !useCerlents;
+                // Determinar cuáles proveedores aplican
+                const canCerlents = hasAdd || maxAbsSph >= 3 || maxAbsCyl > 4;
+                const canReelens = !hasAdd || addVal <= 3;
+                const bothApply = canCerlents && canReelens;
+                // Proveedor activo: si solo uno aplica ir directo, si ambos esperar selección
+                const activeProvider = bothApply ? cotProveedor : (canCerlents ? 'Cerlents' : 'Reelens');
+                const useCerlents = activeProvider === 'Cerlents';
+                const useReelens = activeProvider === 'Reelens';
 
                 // === HELPERS DE RANGO ===
                 // Parsea rango tipo "N-2.00" → [0, 2], "-2.25/-4.00" → [2.25, 4], "-4.00/+4.00" → [0, 4]
@@ -1646,18 +1652,54 @@ export default function Page() {
 
                 return (
                   <>
-                    {/* === Indicador de tipo === */}
-                    <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: useCerlents ? '#A855F710' : '#60A5FA10', border: `1px solid ${useCerlents ? '#A855F730' : '#60A5FA30'}` }}>
-                      <div className="w-3 h-3 rounded-full" style={{ background: useCerlents ? '#A855F7' : '#60A5FA' }} />
-                      <div>
-                        <p className="text-sm font-bold" style={{ color: useCerlents ? '#A855F7' : '#60A5FA' }}>{useCerlents ? 'Talla Digital — Cerlents' : 'Convencional — Reelens'}</p>
-                        <p className="text-[10px] text-[#888]">{useCerlents
-                          ? (hasAdd ? 'Fórmula con adición · Cerlents' : 'Graduación alta (≥±3.00) · Cerlents')
-                          : 'Fórmula convencional · Reelens'}</p>
+                    {/* === Selector de Proveedor (cuando ambos aplican) === */}
+                    {bothApply && !cotProveedor && (
+                      <div className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #D4AF3740' }}>
+                        <div className="text-center">
+                          <p className="text-sm font-bold text-[#D4AF37]">¿Con qué proveedor quieres cotizar?</p>
+                          <p className="text-[10px] text-[#888] mt-1">Esta fórmula puede trabajarse con ambos proveedores</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button onClick={() => { setCotProveedor('Cerlents'); setSelectedCotizacion(null); }}
+                            className="p-4 rounded-xl text-center transition-all hover:scale-[1.02]"
+                            style={{ background: '#A855F715', border: '1px solid #A855F750' }}>
+                            <p className="text-sm font-bold" style={{ color: '#A855F7' }}>📐 Cerlents</p>
+                            <p className="text-[10px] text-[#888] mt-1">Talla Digital</p>
+                            <p className="text-[9px] text-[#555]">Progresivos, Bifocales, Mono</p>
+                          </button>
+                          <button onClick={() => { setCotProveedor('Reelens'); setSelectedCotizacion(null); }}
+                            className="p-4 rounded-xl text-center transition-all hover:scale-[1.02]"
+                            style={{ background: '#60A5FA15', border: '1px solid #60A5FA50' }}>
+                            <p className="text-sm font-bold" style={{ color: '#60A5FA' }}>🔵 Reelens</p>
+                            <p className="text-[10px] text-[#888] mt-1">Convencional</p>
+                            <p className="text-[9px] text-[#555]">Terminados, Bifocales, Talla Conv.</p>
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {useCerlents ? (
+                    {/* === Indicador de tipo === */}
+                    {activeProvider && (
+                      <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: useCerlents ? '#A855F710' : '#60A5FA10', border: `1px solid ${useCerlents ? '#A855F730' : '#60A5FA30'}` }}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full" style={{ background: useCerlents ? '#A855F7' : '#60A5FA' }} />
+                          <div>
+                            <p className="text-sm font-bold" style={{ color: useCerlents ? '#A855F7' : '#60A5FA' }}>{useCerlents ? 'Talla Digital — Cerlents' : 'Convencional — Reelens'}</p>
+                            <p className="text-[10px] text-[#888]">{useCerlents
+                              ? (hasAdd ? 'Fórmula con adición · Cerlents' : 'Graduación alta (≥±3.00) · Cerlents')
+                              : 'Fórmula convencional · Reelens'}</p>
+                          </div>
+                        </div>
+                        {bothApply && (
+                          <button onClick={() => { setCotProveedor(''); setSelectedCotizacion(null); setCotCategoria(''); setCotMaterial(''); }}
+                            className="text-[9px] text-[#888] hover:text-[#D4AF37] transition-colors px-2 py-1 rounded-lg border border-[#222] hover:border-[#D4AF3740]">
+                            Cambiar proveedor
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {activeProvider && useCerlents ? (
                       <>
                         {/* === Dropdowns Cerlents === */}
                         <div className="grid grid-cols-2 gap-3">
