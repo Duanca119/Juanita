@@ -271,6 +271,8 @@ export default function Page() {
   // Cotización - Reelens: categoría + material
   const [cotCategoria, setCotCategoria] = useState<string>('');
   const [cotMaterial, setCotMaterial] = useState<string>('');
+  // Servicios adicionales (bisel, filtro uv, color)
+  const [cotBisel, setCotBisel] = useState<string>('');
   // Selección de proveedor (cuando aplica ambos)
   const [cotProveedor, setCotProveedor] = useState<'Cerlents' | 'Reelens' | ''>('');
   // Selección compartida (ambos proveedores)
@@ -1645,6 +1647,18 @@ export default function Page() {
                 const cotFinal = Math.round(cotCost * cotMarginPct);
                 const cotMargin = cotFinal - cotCost;
 
+                // Servicios adicionales (bisel, filtro uv, color) - solo Reelens
+                const biselOptions: Record<string, number> = {
+                  'Bisel Sencillo': 3000,
+                  'Bisel Especial': 4000,
+                  'Bisel Especial Ranurado': 6000,
+                  'Bisel 3 Piezas': 15000,
+                  'Filtro UV': 7000,
+                  'Color': 7000,
+                };
+                const cotBiselCost = biselOptions[cotBisel] || 0;
+                const cotTotalFinal = cotFinal + cotBiselCost;
+
                 const tipoLenteLabels: Record<string, string> = { progresivo: 'Progresivo', bifocal: 'Bifocal', ocupacional: 'Ocupacional', monofocal: 'Monofocal' };
 
                 const selectStyle = { backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23888%27 stroke-width=%272%27%3E%3Cpath d=%27M6 9l6 6 6-6%27/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat' as const, backgroundPosition: 'right 12px center' };
@@ -1873,6 +1887,19 @@ export default function Page() {
                       </div>
                     </div>
 
+                    {/* === Servicios Adicionales (solo Reelens) === */}
+                    {useReelens && (
+                      <div>
+                        <label className="text-xs text-[#666] uppercase mb-1.5 block">Servicios Adicionales</label>
+                        <select value={cotBisel} onChange={e => setCotBisel(e.target.value)} className={selectClass} style={selectStyle}>
+                          <option value="">Ninguno</option>
+                          {Object.entries(biselOptions).map(([label, price]) => (
+                            <option key={label} value={label}>{label} - {formatCurrency(price)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     {/* === Desglose de Precio === */}
                     {selectedCotizacion && (
                       <div className="rounded-xl p-4 space-y-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
@@ -1884,22 +1911,28 @@ export default function Page() {
                           {selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' && <div className="flex justify-between"><span className="text-[#A0A0A0]">Grupo</span><span className="text-white">{selectedCotizacion.grupo}</span></div>}
                           <div className="flex justify-between"><span className="text-[#A0A0A0]">Proveedor</span><span className="text-white">{selectedCotizacion.provider}</span></div>
                           <div className="h-px bg-[#222]" />
-                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Costo</span><span className="text-white font-medium">{formatCurrency(cotCost)}</span></div>
+                          <div className="flex justify-between"><span className="text-[#A0A0A0]">Costo lente</span><span className="text-white font-medium">{formatCurrency(cotCost)}</span></div>
                           <div className="flex justify-between"><span className="text-[#A0A0A0]">Margen (x{cotMarginPct})</span><span className="text-green-400">{formatCurrency(cotMargin)}</span></div>
+                          {cotBisel && (
+                            <>
+                              <div className="flex justify-between"><span className="text-[#A0A0A0]">{cotBisel}</span><span className="text-yellow-400">{formatCurrency(cotBiselCost)}</span></div>
+                            </>
+                          )}
                           <div className="h-px bg-[#222]" />
                           <div className="flex justify-between items-center">
                             <span className="text-[#D4AF37] font-bold">PRECIO FINAL</span>
-                            <span className="text-xl font-bold text-gold-gradient">{formatCurrency(cotFinal)}</span>
+                            <span className="text-xl font-bold text-gold-gradient">{formatCurrency(cotTotalFinal)}</span>
                           </div>
                         </div>
                       </div>
                     )}
 
                     {/* === WhatsApp === */}
-                    {selectedCotizacion && cotFinal > 0 && (
+                    {selectedCotizacion && cotTotalFinal > 0 && (
                       <button onClick={() => {
                         const formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
-                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\n${selectedCotizacion.columnLabel ? 'Rango: ' + selectedCotizacion.columnLabel + '\n' : ''}${selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' ? 'Grupo: ' + selectedCotizacion.grupo + '\n' : ''}Proveedor: ${selectedCotizacion.provider}\nCosto: ${formatCurrency(cotCost)}\nMultiplicador: x${cotMarginPct}\n\n💰 PRECIO: ${formatCurrency(cotFinal)}${formulaText}`;
+                        const biselText = cotBisel ? `\nServicio: ${cotBisel} ${formatCurrency(cotBiselCost)}` : '';
+                        const text = `👓 Juanita Pelaez Visión\n\nCotización:\nTipo: ${selectedCotizacion.tipoLente}\nMaterial: ${selectedCotizacion.material}\n${selectedCotizacion.columnLabel ? 'Rango: ' + selectedCotizacion.columnLabel + '\n' : ''}${selectedCotizacion.grupo && selectedCotizacion.provider === 'Cerlents' ? 'Grupo: ' + selectedCotizacion.grupo + '\n' : ''}Proveedor: ${selectedCotizacion.provider}\nCosto lente: ${formatCurrency(cotCost)}\nMultiplicador: x${cotMarginPct}${biselText}\n\n💰 PRECIO: ${formatCurrency(cotTotalFinal)}${formulaText}`;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                       }} className="w-full btn-gold flex items-center justify-center gap-2">
                         <Send size={16} /> Compartir Cotización por WhatsApp
