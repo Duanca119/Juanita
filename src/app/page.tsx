@@ -58,9 +58,8 @@ interface LensPrice {
 }
 
 interface Prescription {
-  od: { sph: string; cyl: string; axis: string };
-  oi: { sph: string; cyl: string; axis: string };
-  add: string;
+  od: { sph: string; cyl: string; axis: string; add: string };
+  oi: { sph: string; cyl: string; axis: string; add: string };
 }
 
 // Adaptado: settings es array de {id, name, profit_margin}
@@ -253,9 +252,8 @@ export default function Page() {
   const [analyzing, setAnalyzing] = useState(false);
   const [showFormulaFields, setShowFormulaFields] = useState(false);
   const [prescription, setPrescription] = useState<Prescription>({
-    od: { sph: '', cyl: '', axis: '' },
-    oi: { sph: '', cyl: '', axis: '' },
-    add: '',
+    od: { sph: '', cyl: '', axis: '', add: '' },
+    oi: { sph: '', cyl: '', axis: '', add: '' },
   });
   const [recommendations, setRecommendations] = useState<string[]>([]);
 
@@ -1388,7 +1386,7 @@ export default function Page() {
                     <img src={formulaImage} alt="Fórmula" className="max-h-64 mx-auto rounded-xl" />
                   </div>
                   <div className="flex gap-2 mt-3">
-                    <button onClick={() => { setFormulaImage(null); setFormulaMode('none'); setPrescription({ od: { sph: '', cyl: '', axis: '' }, oi: { sph: '', cyl: '', axis: '' }, add: '' }); setRecommendations([]); setShowFormulaFields(false); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm text-red-400" style={{ background: '#111', border: '1px solid #2a1a1a' }}>
+                    <button onClick={() => { setFormulaImage(null); setFormulaMode('none'); setPrescription({ od: { sph: '', cyl: '', axis: '', add: '' }, oi: { sph: '', cyl: '', axis: '', add: '' } }); setRecommendations([]); setShowFormulaFields(false); }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm text-red-400" style={{ background: '#111', border: '1px solid #2a1a1a' }}>
                       <X size={16} /> Quitar
                     </button>
                     <button onClick={analyzePrescription} disabled={analyzing} className="flex-1 btn-gold flex items-center justify-center gap-2">
@@ -1401,7 +1399,7 @@ export default function Page() {
 
               {/* Botón para volver a elegir después de ver campos */}
               {showFormulaFields && !formulaImage && (
-                <button onClick={() => { setShowFormulaFields(false); setFormulaMode('none'); setPrescription({ od: { sph: '', cyl: '', axis: '' }, oi: { sph: '', cyl: '', axis: '' }, add: '' }); setRecommendations([]); }} className="text-xs text-[#555] hover:text-[#888] transition-colors">
+                <button onClick={() => { setShowFormulaFields(false); setFormulaMode('none'); setPrescription({ od: { sph: '', cyl: '', axis: '', add: '' }, oi: { sph: '', cyl: '', axis: '', add: '' } }); setRecommendations([]); }} className="text-xs text-[#555] hover:text-[#888] transition-colors">
                   ← Volver a elegir método
                 </button>
               )}
@@ -1423,6 +1421,7 @@ export default function Page() {
                           { key: 'sph', label: 'SPH (Esfera)', placeholder: 'Ej: -2.50' },
                           { key: 'cyl', label: 'CYL (Cilindro)', placeholder: 'Ej: -1.00' },
                           { key: 'axis', label: 'AXIS (Eje)', placeholder: 'Ej: 180' },
+                          { key: 'add', label: 'ADD (Adición)', placeholder: 'Ej: +2.50' },
                         ].map((f) => (
                           <div key={f.key}>
                             <label className="text-[10px] text-[#666] uppercase">{f.label}</label>
@@ -1436,13 +1435,8 @@ export default function Page() {
                       </div>
                     ))}
                   </div>
-                  <div className="rounded-xl p-3" style={{ background: '#111', border: '1px solid #1a1a1a' }}>
-                    <label className="text-xs text-[#666] uppercase">ADD (Adición)</label>
-                    <input className="premium-input text-sm mt-1" value={prescription.add} onChange={(e) => setPrescription((p) => ({ ...p, add: e.target.value }))} placeholder="Ej: +2.50" />
-                  </div>
-
                   {/* Botón limpiar formulario manual */}
-                  <button onClick={() => { setPrescription({ od: { sph: '', cyl: '', axis: '' }, oi: { sph: '', cyl: '', axis: '' }, add: '' }); setRecommendations([]); }} className="w-full py-2.5 rounded-xl text-xs text-[#888] hover:text-white transition-colors" style={{ background: '#0a0a0a', border: '1px solid #1a1a1a' }}>
+                  <button onClick={() => { setPrescription({ od: { sph: '', cyl: '', axis: '', add: '' }, oi: { sph: '', cyl: '', axis: '', add: '' } }); setRecommendations([]); }} className="w-full py-2.5 rounded-xl text-xs text-[#888] hover:text-white transition-colors" style={{ background: '#0a0a0a', border: '1px solid #1a1a1a' }}>
                     Limpiar Fórmula
                   </button>
 
@@ -1465,6 +1459,36 @@ export default function Page() {
                 <h2 className="text-lg font-bold text-white">Cotizador de Lentes</h2>
                 <p className="text-xs text-[#666]">Calcula precios con márgenes de ganancia</p>
               </div>
+
+              {/* Fórmula cargada desde Analizar */}
+              {(prescription.od.sph || prescription.oi.sph) && (
+                <div className="rounded-xl p-4 space-y-2" style={{ background: 'linear-gradient(135deg, #1a1505 0%, #111 100%)', border: '1px solid rgba(212,175,55,0.2)' }}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-[#D4AF37] flex items-center gap-1.5"><EyeIcon size={14} /> Fórmula del Paciente</p>
+                    <button onClick={() => setActiveTab('formula')} className="text-[10px] text-[#888] hover:text-[#D4AF37] transition-colors">Editar →</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider">OD (Ojo Derecho)</p>
+                      <div className="grid grid-cols-2 gap-1 text-[11px]">
+                        <div className="rounded-lg px-2 py-1.5 bg-[#0a0a0a]"><span className="text-[#666]">SPH</span> <span className="text-white font-medium ml-1">{prescription.od.sph || '—'}</span></div>
+                        <div className="rounded-lg px-2 py-1.5 bg-[#0a0a0a]"><span className="text-[#666]">CYL</span> <span className="text-white font-medium ml-1">{prescription.od.cyl || '—'}</span></div>
+                        <div className="rounded-lg px-2 py-1.5 bg-[#0a0a0a]"><span className="text-[#666]">AXIS</span> <span className="text-white font-medium ml-1">{prescription.od.axis || '—'}</span></div>
+                        <div className="rounded-lg px-2 py-1.5 bg-[#0a0a0a]"><span className="text-[#666]">ADD</span> <span className="text-white font-medium ml-1">{prescription.od.add || '—'}</span></div>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-[#38BDF8] uppercase tracking-wider">OI (Ojo Izquierdo)</p>
+                      <div className="grid grid-cols-2 gap-1 text-[11px]">
+                        <div className="rounded-lg px-2 py-1.5 bg-[#0a0a0a]"><span className="text-[#666]">SPH</span> <span className="text-white font-medium ml-1">{prescription.oi.sph || '—'}</span></div>
+                        <div className="rounded-lg px-2 py-1.5 bg-[#0a0a0a]"><span className="text-[#666]">CYL</span> <span className="text-white font-medium ml-1">{prescription.oi.cyl || '—'}</span></div>
+                        <div className="rounded-lg px-2 py-1.5 bg-[#0a0a0a]"><span className="text-[#666]">AXIS</span> <span className="text-white font-medium ml-1">{prescription.oi.axis || '—'}</span></div>
+                        <div className="rounded-lg px-2 py-1.5 bg-[#0a0a0a]"><span className="text-[#666]">ADD</span> <span className="text-white font-medium ml-1">{prescription.oi.add || '—'}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Provider */}
               <div>
@@ -1547,7 +1571,11 @@ export default function Page() {
                   if (addBlueFilter) extrasList.push('Filtro Azul');
                   if (addPhotochromic) extrasList.push('Fotocromático');
                   if (addAntireflective) extrasList.push('Antirreflejo');
-                  const text = `👓 Juanita Pelaez Visión\n\nCotización:\nLente: ${selectedLens?.lens_type} (${selectedLens?.quality})\nProveedor: ${providers.find(p => p.id === selectedProvider)?.name}\nExtras: ${extrasList.join(', ') || 'Ninguno'}\nCosto: ${formatCurrency(pricingCalc.cost)}\nMargen: ${Math.round(pricingCalc.marginPct)}%\n\n💰 PRECIO: ${formatCurrency(pricingCalc.finalPrice)}`;
+                  let formulaText = '';
+                  if (prescription.od.sph || prescription.oi.sph) {
+                    formulaText = `\n\n📋 Fórmula:\nOD: ${prescription.od.sph || '—'} / ${prescription.od.cyl || '—'} × ${prescription.od.axis || '—'}${prescription.od.add ? ' Add ' + prescription.od.add : ''}\nOI: ${prescription.oi.sph || '—'} / ${prescription.oi.cyl || '—'} × ${prescription.oi.axis || '—'}${prescription.oi.add ? ' Add ' + prescription.oi.add : ''}`;
+                  }
+                  const text = `👓 Juanita Pelaez Visión\n\nCotización:\nLente: ${selectedLens?.lens_type} (${selectedLens?.quality})\nProveedor: ${providers.find(p => p.id === selectedProvider)?.name}\nExtras: ${extrasList.join(', ') || 'Ninguno'}\nCosto: ${formatCurrency(pricingCalc.cost)}\nMargen: ${Math.round(pricingCalc.marginPct)}%\n\n💰 PRECIO: ${formatCurrency(pricingCalc.finalPrice)}${formulaText}`;
                   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                 }} className="w-full btn-gold flex items-center justify-center gap-2">
                   <Send size={16} /> Compartir Cotización por WhatsApp
